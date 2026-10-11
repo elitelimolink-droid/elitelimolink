@@ -79,17 +79,17 @@ async function buildPricingSnapshot(rawBizId: string | null | undefined, cacheab
     if (bizId) {
       const result = await pocketbaseAdmin.listRecords<SettingsRecord>('settings', {
         perPage: 1,
-        sort: '-created',
+        sort: '-updated,-created',
         filter: `owner = "${bizId}"`,
       });
       record = result.items[0] ?? null;
       owner = bizId;
     } else {
-      // No business specified: serve the primary (oldest) operator's snapshot
-      // so the site's main booking page keeps quoting the original business.
+      // No business specified: serve the most recently updated active operator's snapshot
+      // so rate changes reliably appear on the main booking page.
       const result = await pocketbaseAdmin.listRecords<SettingsRecord>('settings', {
         perPage: 1,
-        sort: 'created',
+        sort: '-updated,-created',
       });
       record = result.items[0] ?? null;
       owner = record?.owner ?? '';
@@ -110,7 +110,7 @@ async function buildPricingSnapshot(rawBizId: string | null | undefined, cacheab
         taxEnabled: !!record.taxEnabled,
         taxPercent: record.taxPercent ?? DEFAULT_PRICING.taxPercent,
         tollsEnabled: !!record.tollsEnabled,
-        fareVisible: !!record.fareVisible,
+        fareVisible: record.fareVisible !== false,
         paymentRequired: record.paymentRequired !== false,
         carSeatPrice: record.carSeatPrice ?? DEFAULT_PRICING.carSeatPrice,
         extraStopPrice: record.extraStopPrice ?? DEFAULT_PRICING.extraStopPrice,

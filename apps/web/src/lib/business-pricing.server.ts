@@ -82,7 +82,7 @@ export async function loadBusinessPricing(bizId: string): Promise<BusinessPricin
     if (bizId) {
       const result = await pocketbaseAdmin.listRecords<SettingsRecord>('settings', {
         perPage: 1,
-        sort: '-created',
+        sort: '-updated,-created',
         filter: `owner = "${bizId}"`,
       });
       record = result.items[0] ?? null;
@@ -90,7 +90,7 @@ export async function loadBusinessPricing(bizId: string): Promise<BusinessPricin
     } else {
       const result = await pocketbaseAdmin.listRecords<SettingsRecord>('settings', {
         perPage: 1,
-        sort: 'created',
+        sort: '-updated,-created',
       });
       record = result.items[0] ?? null;
       owner = record?.owner ?? '';
@@ -111,7 +111,7 @@ export async function loadBusinessPricing(bizId: string): Promise<BusinessPricin
         taxEnabled: !!record.taxEnabled,
         taxPercent: record.taxPercent ?? DEFAULT_PRICING.taxPercent,
         tollsEnabled: !!record.tollsEnabled,
-        fareVisible: !!record.fareVisible,
+        fareVisible: record.fareVisible !== false,
         paymentRequired: record.paymentRequired !== false,
         carSeatPrice: record.carSeatPrice ?? DEFAULT_PRICING.carSeatPrice,
         extraStopPrice: record.extraStopPrice ?? DEFAULT_PRICING.extraStopPrice,

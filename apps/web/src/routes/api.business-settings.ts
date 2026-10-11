@@ -112,7 +112,7 @@ async function loadSettingsRow(bizId: string): Promise<SettingsRecord | null> {
 	try {
 		const result = await pocketbaseAdmin.listRecords<SettingsRecord>('settings', {
 			perPage: 1,
-			sort: '-created',
+			sort: '-updated,-created',
 			filter: `owner = "${bizId}"`,
 		});
 		return result.items[0] ?? null;

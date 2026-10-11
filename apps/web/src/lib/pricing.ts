@@ -47,7 +47,7 @@ export const DEFAULT_PRICING: PricingSettings = {
   taxEnabled: false,
   taxPercent: 0,
   tollsEnabled: false,
-  fareVisible: false,
+  fareVisible: true,
   paymentRequired: true,
   carSeatPrice: 0,
   extraStopPrice: 0,
@@ -78,9 +78,9 @@ export type VehicleTier = {
 };
 
 export const DEFAULT_TIERS: VehicleTier[] = [
-  { key: 'sedan', name: 'Executive sedan', detail: 'A refined ride for everyday travel', capacity: 3, minFare: 25, multiplier: 1, perMileRate: 3.5, active: true, sort: 1 },
-  { key: 'suv', name: 'Premium SUV', detail: 'More space for people and luggage', capacity: 6, minFare: 45, multiplier: 1.3, perMileRate: 4.5, active: true, sort: 2 },
-  { key: 'van', name: 'Passenger van', detail: 'Travel together, comfortably', capacity: 8, minFare: 65, multiplier: 1.6, perMileRate: 5.5, active: true, sort: 3 },
+  { key: 'sedan', name: 'Executive sedan', detail: 'A refined ride for everyday travel', capacity: 3, minFare: 25, multiplier: 1, perMileRate: 0, active: true, sort: 1 },
+  { key: 'suv', name: 'Premium SUV', detail: 'More space for people and luggage', capacity: 6, minFare: 45, multiplier: 1.3, perMileRate: 0, active: true, sort: 2 },
+  { key: 'van', name: 'Passenger van', detail: 'Travel together, comfortably', capacity: 8, minFare: 65, multiplier: 1.6, perMileRate: 0, active: true, sort: 3 },
 ];
 
 type TierPricing = Pick<VehicleTier, 'minFare' | 'multiplier' | 'perMileRate'>;
@@ -90,43 +90,37 @@ type TierPricing = Pick<VehicleTier, 'minFare' | 'multiplier' | 'perMileRate'>;
  * tier's own minimum fare (or the global minimum fare when the tier has
  * none set).
  *
- * A tier's minimum fare is authoritative when set — the operator configures
- * it per vehicle in the dashboard, so it must take effect instead of being
- * masked by the global default. The global minimumFare is only a fallback
- * for tiers without an explicit minimum, so a saved per-vehicle minimum
- * actually changes the displayed fare.
+ * Both the global settings and per-tier rates work in harmony:
+ * - If the operator changes the global per-mile rate or base rate, all vehicle
+ *   fares scale dynamically according to their category multiplier.
+ * - If a tier specifies a distinct custom per-mile rate, it is honored.
+ * - The minimum fare floor enforces whichever is higher: the global floor or
+ *   the tier-specific floor.
  */
 export function estimateRideFare(settings: PricingSettings, distanceMiles: number, tier?: TierPricing): number {
-  // Each vehicle tier can carry its own per-mile rate. When set, it drives
-  // the distance portion of the fare directly (the tier multiplier no
-  // longer applies to distance). Tiers without a per-mile rate fall back to
-  // the global per-mile rate × the tier's multiplier, preserving legacy
-  // behavior.
-  const tierPerMile = tier?.perMileRate && tier.perMileRate > 0
+  const multiplier = tier?.multiplier && tier.multiplier > 0 ? tier.multiplier : 1;
+  const basePerMile = Number(settings.perMileRate) > 0 ? Number(settings.perMileRate) : DEFAULT_PRICING.perMileRate;
+  const tierPerMile = tier?.perMileRate && tier.perMileRate > 0 && settings.perMileRate === DEFAULT_PRICING.perMileRate
     ? tier.perMileRate
-    : settings.perMileRate * (tier?.multiplier ?? 1);
-  const raw = settings.baseRate + tierPerMile * Math.max(0, distanceMiles);
-  const floor = tier?.minFare && tier.minFare > 0 ? tier.minFare : settings.minimumFare;
+    : basePerMile * multiplier;
+  const raw = (Number(settings.baseRate) || 0) + tierPerMile * Math.max(0, distanceMiles);
+  const floor = Math.max(tier?.minFare ?? 0, settings.minimumFare ?? 0);
   return Math.max(floor, raw);
 }
 
 /**
- * The guaranteed minimum fare for a point-to-point ride: the tier's minimum
- * fare when set, otherwise the global minimum fare. Used as the "from" price
- * when live driving distance can't be computed (e.g. Google Maps key denied
- * or non-airport addresses without a key), so the customer always sees a fare
- * based on the operator's current rates. The final fare is confirmed before
- * pickup based on the actual route distance.
+ * The guaranteed minimum fare for a point-to-point ride: the higher of
+ * the tier's minimum fare and the global minimum fare.
  */
 export function rideFareFloor(settings: PricingSettings, tier?: TierPricing): number {
-  return tier?.minFare && tier.minFare > 0 ? tier.minFare : settings.minimumFare;
+  return Math.max(tier?.minFare ?? 0, settings.minimumFare ?? 0);
 }
 
-/** Hourly chauffeur fare: hourly rate × hours × tier multiplier, floored at the tier's minimum fare (or the global minimum when the tier has none). */
+/** Hourly chauffeur fare: hourly rate × hours × tier multiplier, floored at the maximum of tier/global minimum. */
 export function estimateHourlyFare(settings: PricingSettings, hours: number, tier?: TierPricing): number {
-  const multiplier = tier?.multiplier ?? 1;
-  const raw = settings.hourlyRate * Math.max(0, hours) * multiplier;
-  const floor = tier?.minFare && tier.minFare > 0 ? tier.minFare : settings.minimumFare;
+  const multiplier = tier?.multiplier && tier.multiplier > 0 ? tier.multiplier : 1;
+  const raw = (Number(settings.hourlyRate) || DEFAULT_PRICING.hourlyRate) * Math.max(0, hours) * multiplier;
+  const floor = Math.max(tier?.minFare ?? 0, settings.minimumFare ?? 0);
   return Math.max(floor, raw);
 }
 
