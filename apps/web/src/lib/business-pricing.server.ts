@@ -62,6 +62,70 @@ export function normalizeBizId(raw: string | null | undefined): string {
   return /^[a-z0-9]{15}$/.test(value) ? value : '';
 }
 
+/**
+ * Resolves a business ID from either a 15-char ID, a human-readable slug
+ * (e.g. 'teterboro-airport-car-service' or 'teterboro'), or the request's
+ * host domain (e.g. 'teterborocarservice.online').
+ */
+export async function resolveBusinessId(rawIdOrSlug: string | null | undefined, hostHeader?: string | null): Promise<string> {
+  const raw = (rawIdOrSlug ?? '').trim();
+  if (/^[a-z0-9]{15}$/.test(raw)) {
+    return raw;
+  }
+
+  const slug = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const host = (hostHeader || '').toLowerCase();
+
+  try {
+    const users = await pocketbaseAdmin.listRecords<{ id: string; name?: string; email?: string; managedBy?: any }>('users', {
+      perPage: 100,
+      sort: 'created',
+    });
+
+    if (slug && slug !== 'elitelimolink' && slug !== 'home') {
+      const match = users.items.find(u => {
+        const uName = (u.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        const uEmail = (u.email || '').toLowerCase();
+        return uName === slug || uName.includes(slug) || slug.includes(uName) || uEmail.includes(slug);
+      });
+      if (match) return match.id;
+
+      try {
+        const settings = await pocketbaseAdmin.listRecords<{ id: string; owner?: string; businessName?: string }>('settings', {
+          perPage: 100,
+        });
+        const settingMatch = settings.items.find(s => {
+          const sName = (s.businessName || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          return sName === slug || sName.includes(slug) || slug.includes(sName);
+        });
+        if (settingMatch && settingMatch.owner) return settingMatch.owner;
+      } catch {
+        // non-fatal
+      }
+    }
+
+    if (host && !host.includes('elitelimolink') && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+      const domainClean = host.split(':')[0].split('.')[0].replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const domainAlnum = domainClean.replace(/-/g, '');
+      const match = users.items.find(u => {
+        const uName = (u.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const uAlnum = uName.replace(/-/g, '');
+        const uEmail = (u.email || '').toLowerCase();
+        return domainClean.includes(uName) || uName.includes(domainClean) ||
+               domainAlnum.includes(uAlnum) || uAlnum.includes(domainAlnum) ||
+               uEmail.includes(domainClean);
+      });
+      if (match) return match.id;
+    }
+
+    // Default to the primary business (managedBy is empty)
+    const primary = users.items.find(u => !u.managedBy || (Array.isArray(u.managedBy) && u.managedBy.length === 0));
+    return primary ? primary.id : (users.items[0]?.id ?? '');
+  } catch {
+    return '';
+  }
+}
+
 /** Clamps the advance-notice setting to the supported 1–24 hour range. */
 function clampAdvanceHours(value: unknown): number {
   const n = Number(value);

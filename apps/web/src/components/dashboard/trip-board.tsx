@@ -518,8 +518,19 @@ export function TripBoard({
     }
   }
 
-  async function copyBizLink(id: string) {
-    const link = `${window.location.origin}/?biz=${id}`;
+  function toBizSlug(name?: string, id?: string): string {
+    const s = (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return s || id || '';
+  }
+
+  function getBizLink(b: { id: string; businessName?: string }, isOwn: boolean): string {
+    if (typeof window === 'undefined') return '';
+    if (isOwn) return `${window.location.origin}/`;
+    const slug = toBizSlug(b.businessName, b.id);
+    return `${window.location.origin}/${slug}`;
+  }
+
+  async function copyBizLink(link: string, id: string) {
     try {
       await navigator.clipboard.writeText(link);
       setCopiedBizId(id);
@@ -593,7 +604,7 @@ export function TripBoard({
         setAddError(data.error || 'Could not create business.');
         return;
       }
-      setAddLink(`${window.location.origin}/?biz=${data.id}`);
+      setAddLink(getBizLink({ id: data.id, businessName: name }, false));
       setAddSuccess(`Created “${name}”.`);
       setAddForm({ businessName: '' });
       await loadBusinesses();
@@ -1074,7 +1085,7 @@ export function TripBoard({
                 // account email, then a placeholder, so every business entry is
                 // always visible — even one whose settings row is still seeding.
                 const displayName = (b.businessName || '').trim() || b.email || 'Unnamed business';
-                const link = `${window.location.origin}/?biz=${b.id}`;
+                const link = getBizLink(b, isOwn);
                 return (
                   <li
                     key={b.id}
@@ -1109,7 +1120,7 @@ export function TripBoard({
                         onFocus={(e) => e.currentTarget.select()}
                         aria-label={`${displayName} booking link`}
                       />
-                      <button type="button" className="trip-link-copy" onClick={() => copyBizLink(b.id)}>
+                      <button type="button" className="trip-link-copy" onClick={() => copyBizLink(link, b.id)}>
                         {copiedBizId === b.id ? <Check size={15} /> : <Copy size={15} />} {copiedBizId === b.id ? 'Copied' : 'Copy'}
                       </button>
                       <a

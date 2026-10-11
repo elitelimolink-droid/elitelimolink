@@ -19,13 +19,12 @@ import { useActivityTracker } from '@/lib/activity-tracker';
 const initialDraft: ReservationDraft = { service: 'ride', pickup: '', dropoff: '', extraStop: '', extraStopToggle: false, date: '', time: '', returnTrip: false, returnDate: '', returnTime: '', hours: 3, vehicle: 'sedan', passengers: 1, name: '', email: '', phone: '', flight: '', notes: '', carSeat: false, insidePickup: false };
 const stages = ['Trip', 'Vehicle', 'Details', 'Review'];
 
-export function BookingExperience({ initialBusinessName }: { initialBusinessName?: string }) {
-  // Multi-business booking links: `/?biz=<operatorUserId>` serves that
-  // operator's rates, categories, and brand, and files the reservation in
-  // their dashboard only. No param = the primary (original) business.
+export function BookingExperience({ initialBusinessName, initialBizId }: { initialBusinessName?: string; initialBizId?: string }) {
+  // Multi-business booking links: path slug, `initialBizId`, or `/?biz=<operatorUserId>`
+  // serves that operator's rates, categories, and brand.
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const biz = searchParams.get('biz') ?? '';
+  const biz = initialBizId || searchParams.get('biz') || '';
   const { pricing, loaded: pricingLoaded, error: pricingError } = usePricing(biz);
   const businessName = pricing.businessName || initialBusinessName || 'ELITELIMOLINK';
   // Anonymous interaction tracking: logs clicks, selected addresses, and
@@ -284,11 +283,13 @@ export function BookingExperience({ initialBusinessName }: { initialBusinessName
   // A drivable route exists only for point-to-point rides once both the pickup
   // and dropoff are verified. The companion-pane map (desktop) and the inline
   // maps (mobile) both key off this so the customer can see where they're
-  // going as soon as the two locations are valid.
   const hasRoute = draft.service === 'ride' && Boolean(draft.pickupCoords && draft.dropoffCoords);
+  const brandInitials = (businessName || 'EL').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || 'EL';
+  const markFirst = brandInitials[0] || 'E';
+  const markSecond = brandInitials[1] || brandInitials[0] || 'L';
   return <main className="booking-page">
     <div className="ambient ambient-one" /><div className="ambient ambient-two" />
-    <div className="page-brand"><span className="brand-mark">B<span>L</span></span><span className="brand-word">{businessName}<span className="brand-sub"> / RESERVATIONS</span></span></div>
+    <div className="page-brand"><span className="brand-mark">{markFirst}<span>{markSecond}</span></span><span className="brand-word">{businessName}<span className="brand-sub"> / RESERVATIONS</span></span></div>
     {done ? (
       <div className="payment-card">
         <ThemeToggle className="theme-toggle card-theme" />

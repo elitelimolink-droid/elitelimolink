@@ -34,4 +34,6 @@ export default [
 	route('payment/success', 'routes/payment.success.tsx'),
 	route('payment/cancel', 'routes/payment.cancel.tsx'),
 	route('api/*', 'routes/api.$.ts'),
+	route('biz/:bizSlug', 'routes/home.tsx'),
+	route(':bizSlug', 'routes/home.tsx'),
 ] satisfies RouteConfig;

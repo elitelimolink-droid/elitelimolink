@@ -1,6 +1,7 @@
 import { json, withApi, readJsonBody } from '@/lib/api.server';
 import { pocketbaseAdmin } from '@/lib/pocketbase-client.server';
 import { DEFAULT_PRICING, DEFAULT_TIERS, type VehicleTier } from '@/lib/pricing';
+import { resolveBusinessId } from '@/lib/business-pricing.server';
 
 /** Clamps the advance-notice setting to the supported 1–24 hour range. */
 function clampAdvanceHours(value: unknown): number {
@@ -70,7 +71,7 @@ function normalizeBizId(raw: string | null | undefined): string {
  */
 async function buildPricingSnapshot(rawBizId: string | null | undefined, cacheable = true) {
   const configured = Boolean(process.env.GOOGLE_MAPS_API_KEY);
-  const bizId = normalizeBizId(rawBizId);
+  const bizId = await resolveBusinessId(rawBizId);
 
   // Resolve the target operator's settings row.
   let record: SettingsRecord | null = null;

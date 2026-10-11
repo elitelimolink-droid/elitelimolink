@@ -1,6 +1,6 @@
 import { apiError, json, readJsonBody, withApi } from '@/lib/api.server';
 import { fetchDrivingRoute } from '@/lib/geo.server';
-import { loadBusinessPricing, normalizeBizId } from '@/lib/business-pricing.server';
+import { loadBusinessPricing, resolveBusinessId } from '@/lib/business-pricing.server';
 import { buildFareBreakdown, estimateHourlyFare, estimateRideFare, formatFare, type TipChoice, type TierFare } from '@/lib/pricing';
 
 type Coords = { lat?: number; lng?: number };
@@ -74,7 +74,8 @@ export const action = withApi(async ({ request }) => {
     return apiError(422, 'service must be "ride" or "hourly"');
   }
 
-  const { pricing, tiers } = await loadBusinessPricing(normalizeBizId(body.biz));
+  const resolvedBizId = await resolveBusinessId(body.biz);
+  const { pricing, tiers } = await loadBusinessPricing(resolvedBizId);
   const tipOverride = resolveTip(body);
   const addons = {
     carSeat: body.carSeat === true,

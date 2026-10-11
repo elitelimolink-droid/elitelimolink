@@ -1,32 +1,49 @@
 import type { Route } from './+types/home';
 import { seo } from '@/lib/seo';
-import { loadBusinessPricing, normalizeBizId } from '@/lib/business-pricing.server';
+import { loadBusinessPricing, resolveBusinessId } from '@/lib/business-pricing.server';
 import { BookingExperience } from '@/components/home/booking-experience';
 
 const DEFAULT_BUSINESS_NAME = 'ELITELIMOLINK';
 
 /**
- * Resolves the business brand name for the `?biz=<operatorUserId>` booking
- * link so the browser tab and page metadata show the correct location's
- * name. The full pricing snapshot is NOT seeded here: this loader is a GET
- * response, and the platform edge-caches GET responses (overriding the app's
- * Cache-Control) for up to 7 days. Seeding pricing from it would bake a
- * stale snapshot into the server-rendered HTML — customers would see the
- * operator's previous rates until the cache expired, even after the operator
- * saved new prices. Instead the booking flow loads live pricing through the
- * never-cached POST /api/pricing (`usePricing`), so the panel always
- * reflects the operator's current saved rates.
+ * Resolves the business brand and settings for the requested booking page.
+ * Supports:
+ *  - Custom domains (e.g. teterborocarservice.online -> Teterboro Airport Car Service)
+ *  - Direct path slugs (e.g. /teterboro-airport-car-service)
+ *  - Traditional query parameter (?biz=...)
+ *  - Root domain fallback (elitelimolink.com -> ELITELIMOLINK)
  */
-export async function loader({ url }: Route.LoaderArgs) {
-  const bizId = normalizeBizId(url.searchParams.get('biz'));
+export async function loader({ request, url, params }: Route.LoaderArgs) {
+  const host = request.headers.get('host') || '';
+  const searchBiz = url.searchParams.get('biz');
+  const slug = (params as Record<string, string | undefined>)?.bizSlug;
+
+  // Filter out any known static paths that aren't business slugs
+  if (slug && ['login', 'dashboard', 'dispatch', 'driver', 'api', 'payment', 'robots.txt', 'sitemap.xml', 'favicon.ico', 'assets', 'images'].includes(slug.toLowerCase())) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  const bizId = await resolveBusinessId(slug || searchBiz, host);
   let businessName = DEFAULT_BUSINESS_NAME;
   try {
     const bp = await loadBusinessPricing(bizId);
     if (bp.businessName) businessName = bp.businessName;
   } catch {
-    // fall back to the default brand; live pricing loads client-side
+    // fall back to default brand
   }
-  return { businessName };
+
+  // If an explicit path slug was requested, ensure it actually matches the business
+  if (slug) {
+    const slugNorm = slug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const nameNorm = (businessName || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const isIdMatch = bizId.toLowerCase() === slugNorm;
+    const isNameMatch = nameNorm === slugNorm || nameNorm.includes(slugNorm) || slugNorm.includes(nameNorm);
+    if (!isIdMatch && !isNameMatch) {
+      throw new Response('Not Found', { status: 404 });
+    }
+  }
+
+  return { businessName, bizId };
 }
 
 export function meta({ matches, location, loaderData }: Route.MetaArgs) {
@@ -38,5 +55,5 @@ export function meta({ matches, location, loaderData }: Route.MetaArgs) {
 }
 
 export default function HomePage({ loaderData }: Route.ComponentProps) {
-  return <BookingExperience initialBusinessName={loaderData.businessName} />;
+  return <BookingExperience initialBusinessName={loaderData?.businessName} initialBizId={loaderData?.bizId} />;
 }
