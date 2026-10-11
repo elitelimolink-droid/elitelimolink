@@ -100,7 +100,7 @@ type TierPricing = Pick<VehicleTier, 'minFare' | 'multiplier' | 'perMileRate'>;
 export function estimateRideFare(settings: PricingSettings, distanceMiles: number, tier?: TierPricing): number {
   const multiplier = tier?.multiplier && tier.multiplier > 0 ? tier.multiplier : 1;
   const basePerMile = Number(settings.perMileRate) > 0 ? Number(settings.perMileRate) : DEFAULT_PRICING.perMileRate;
-  const tierPerMile = tier?.perMileRate && tier.perMileRate > 0 && settings.perMileRate === DEFAULT_PRICING.perMileRate
+  const tierPerMile = tier?.perMileRate && tier.perMileRate > 0
     ? tier.perMileRate
     : basePerMile * multiplier;
   const raw = (Number(settings.baseRate) || 0) + tierPerMile * Math.max(0, distanceMiles);
