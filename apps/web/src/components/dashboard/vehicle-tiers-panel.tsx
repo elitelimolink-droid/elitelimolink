@@ -197,7 +197,7 @@ export function VehicleTiersPanel({
         <span className="dash-card-icon"><CarFront size={18} /></span>
         <div>
           <h2>Vehicle categories{businessLabel ? <span className="dash-card-business"> · {businessLabel}</span> : null}</h2>
-          <p>Each vehicle category groups its details and applicable pricing together — edit the name, capacity, minimum fare, per-mile rate, and hourly multiplier per tier.</p>
+          <p>Each vehicle category groups its details and applicable pricing together — edit the name, capacity, base rate, per-mile rate, and hourly multiplier per tier.</p>
         </div>
       </div>
 
@@ -252,10 +252,10 @@ export function VehicleTiersPanel({
                   <span className="tier-subgroup-label">Pricing</span>
                   <div className="tier-pricing-grid">
                     <label className="rate-field">
-                      <span>Minimum fare</span>
+                      <span>Base rate</span>
                       <div className="rate-input">
                         <input type="number" step="0.01" min="0" value={t.minFare} onChange={e => update(t.id, { minFare: Number(e.target.value) })} />
-                        <em>floor</em>
+                        <em>base</em>
                       </div>
                     </label>
                     <label className="rate-field">

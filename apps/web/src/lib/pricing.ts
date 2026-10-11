@@ -103,8 +103,11 @@ export function estimateRideFare(settings: PricingSettings, distanceMiles: numbe
   const tierPerMile = tier?.perMileRate && tier.perMileRate > 0
     ? tier.perMileRate
     : basePerMile * multiplier;
-  const raw = (Number(settings.baseRate) || 0) + tierPerMile * Math.max(0, distanceMiles);
-  const floor = Math.max(tier?.minFare ?? 0, settings.minimumFare ?? 0);
+  const tierBaseRate = (tier?.minFare !== undefined && tier.minFare !== null && tier.minFare > 0)
+    ? tier.minFare
+    : (Number(settings.baseRate) || 0);
+  const raw = tierBaseRate + tierPerMile * Math.max(0, distanceMiles);
+  const floor = tierBaseRate > 0 ? tierBaseRate : (settings.minimumFare ?? 0);
   return Math.max(floor, raw);
 }
 
