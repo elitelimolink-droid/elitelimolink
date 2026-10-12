@@ -725,7 +725,7 @@ export function TripBoard({
                 }}
                 title="Open Driver View & Fleet Map"
               >
-                <Compass size={14} /> Driver View &amp; Harita
+                <Compass size={14} /> Driver view
               </button>
               <button type="button" className="trip-icon-btn" aria-label="Filter and sort" onClick={() => setFilterOpen(true)}>
                 <Filter size={24} strokeWidth={2} />
@@ -944,7 +944,7 @@ export function TripBoard({
       ) : panel === 'fleet' ? (
         <div className="trip-settings">
           <div className="trip-settings-head">
-            <h2>Drive View · Live Fleet Tracking</h2>
+            <h2>Driver view · Live Fleet Tracking</h2>
             <button type="button" onClick={() => setPanel('trips')}>Back to trips</button>
           </div>
           <FleetMap
@@ -999,13 +999,13 @@ export function TripBoard({
             </div>
             {email && <p className="trip-drawer-email">{email}</p>}
             <button type="button" onClick={() => { setPanel('trips'); setMenuOpen(false); }}>Reservations</button>
-            <button type="button" onClick={() => { setFocusedFleetDriverId(undefined); setPanel('fleet'); setMenuOpen(false); }}>🚗 Driver View &amp; Harita Takibi</button>
+            <button type="button" onClick={() => { setFocusedFleetDriverId(undefined); setPanel('fleet'); setMenuOpen(false); }}>Driver view</button>
             <button type="button" onClick={() => { setPanel('activity'); setMenuOpen(false); }}>Live activity</button>
             <button type="button" onClick={() => { setPanel('settings'); setMenuOpen(false); }}>Pricing &amp; settings</button>
             <button type="button" onClick={() => { setManageOpen(true); setMenuOpen(false); }}>Manage businesses</button>
             <button type="button" onClick={() => { setPanel('drivers'); setMenuOpen(false); }}>Drivers</button>
-            <Link to="/driver" onClick={() => setMenuOpen(false)}>🚗 Chauffeur Portal (/driver)</Link>
             <Link to="/dispatch" onClick={() => setMenuOpen(false)}>Dispatch center</Link>
+            <Link to="/driver" onClick={() => setMenuOpen(false)}>Driver portal</Link>
             <Link to="/">Booking site</Link>
             <button type="button" className="trip-signout" onClick={signOut}>Sign out</button>
           </nav>
