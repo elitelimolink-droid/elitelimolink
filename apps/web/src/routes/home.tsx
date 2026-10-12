@@ -1,4 +1,7 @@
 import type { Route } from './+types/home';
+import { redirect } from 'react-router';
+import { useEffect } from 'react';
+import pb from '@/lib/pocketbase-client';
 import { seo } from '@/lib/seo';
 import { loadBusinessPricing, resolveBusinessId } from '@/lib/business-pricing.server';
 import { BookingExperience } from '@/components/home/booking-experience';
@@ -46,6 +49,16 @@ export async function loader({ request, url, params }: Route.LoaderArgs) {
   return { businessName, bizId };
 }
 
+// Keep chauffeurs isolated to driver portal: redirect signed-in drivers to /driver
+export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
+  const record = pb.authStore.record as { collectionName?: string } | null;
+  if (pb.authStore.isValid && record?.collectionName === 'drivers') {
+    throw redirect('/driver');
+  }
+  return serverLoader();
+}
+clientLoader.hydrate = true as const;
+
 export function meta({ matches, location, loaderData }: Route.MetaArgs) {
   const businessName = loaderData?.businessName || DEFAULT_BUSINESS_NAME;
   return seo({ matches, location }, {
@@ -55,5 +68,12 @@ export function meta({ matches, location, loaderData }: Route.MetaArgs) {
 }
 
 export default function HomePage({ loaderData }: Route.ComponentProps) {
+  useEffect(() => {
+    const record = pb.authStore.record as { collectionName?: string } | null;
+    if (pb.authStore.isValid && record?.collectionName === 'drivers') {
+      window.location.replace('/driver');
+    }
+  }, []);
+
   return <BookingExperience initialBusinessName={loaderData?.businessName} initialBizId={loaderData?.bizId} />;
 }

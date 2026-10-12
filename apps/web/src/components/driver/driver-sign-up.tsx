@@ -51,7 +51,7 @@ export function DriverSignUp() {
     <main className="auth-page">
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
-      <a href="/" className="page-brand" style={{ textDecoration: 'none' }}>
+      <a href="/driver/login" className="page-brand" style={{ textDecoration: 'none' }}>
         <span className="brand-mark">E<span>L</span></span>
         <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / CHAUFFEUR</span></span>
       </a>

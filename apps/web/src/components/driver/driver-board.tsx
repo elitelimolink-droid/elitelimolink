@@ -141,8 +141,8 @@ export function DriverBoard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Tab & search filtering
-  const [activeTab, setActiveTab] = useState<'active' | 'drive' | 'completed' | 'all' | 'settings'>('active');
+  // Tab & search filtering - Drive View HUD is permanently open and default
+  const [activeTab, setActiveTab] = useState<'active' | 'drive' | 'completed' | 'all' | 'settings'>('drive');
   const [search, setSearch] = useState('');
   const [driveMenuOpen, setDriveMenuOpen] = useState(false);
 
@@ -186,6 +186,20 @@ export function DriverBoard({
         if (r.driverNotes) initialNotes[r.id] = r.driverNotes;
       }
       setNotesDraft(initialNotes);
+
+      // Auto-select active or upcoming ride so Drive View opens immediately
+      const active = records.find((t) => {
+        const stage = getTripStage(t);
+        return stage >= 1 && stage <= 3;
+      });
+      if (active) {
+        setDriveViewTripId(active.id);
+      } else {
+        const sortedRecs = [...records].sort(compareByPickup);
+        const upcoming = sortedRecs.find((t) => getTripStage(t) < 4);
+        if (upcoming) setDriveViewTripId(upcoming.id);
+        else if (sortedRecs.length > 0) setDriveViewTripId(sortedRecs[0].id);
+      }
     } catch {
       setError('Couldn’t load your trips. Please sign in again.');
     }
@@ -411,6 +425,21 @@ export function DriverBoard({
     });
   }, [trips]);
 
+  // Drive View auto-selection: keep active or next assigned ride locked into the cockpit
+  useEffect(() => {
+    if (trips.length === 0) return;
+    const currentExists = trips.some((t) => t.id === driveViewTripId);
+    if (!driveViewTripId || !currentExists) {
+      if (activeRide) {
+        setDriveViewTripId(activeRide.id);
+      } else {
+        const upcoming = sorted.find((t) => getTripStage(t) < 4);
+        if (upcoming) setDriveViewTripId(upcoming.id);
+        else if (sorted.length > 0) setDriveViewTripId(sorted[0].id);
+      }
+    }
+  }, [trips, activeRide, sorted, driveViewTripId]);
+
   async function reportDriverGps(lat: number, lng: number, heading: number, speedMph: number) {
     try {
       await fetch('/api/driver-location', {
@@ -629,7 +658,15 @@ export function DriverBoard({
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <header className="dashboard-header">
-        <a href="/" className="page-brand" style={{ textDecoration: 'none' }}>
+        <a
+          href="/driver"
+          className="page-brand"
+          style={{ textDecoration: 'none' }}
+          onClick={(e) => {
+            e.preventDefault();
+            setActiveTab('drive');
+          }}
+        >
           <span className="brand-mark">E<span>L</span></span>
           <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / CHAUFFEUR</span></span>
         </a>
@@ -637,13 +674,18 @@ export function DriverBoard({
           <button
             type="button"
             className="driver-driveview-pill"
-            style={{ padding: '6px 12px', fontSize: 12 }}
-            onClick={() => {
-              if (activeRide) setDriveViewTripId(activeRide.id);
-              else if (sorted.length > 0) setDriveViewTripId(sorted[0].id);
-              else setActiveTab('drive');
+            style={{
+              padding: '6px 12px',
+              fontSize: 12,
+              background: activeTab === 'drive' ? '#2563eb' : undefined,
+              color: activeTab === 'drive' ? '#fff' : undefined,
             }}
-            title="Open Driver View"
+            onClick={() => {
+              setActiveTab('drive');
+              if (activeRide) setDriveViewTripId(activeRide.id);
+              else if (sorted.length > 0 && !driveViewTripId) setDriveViewTripId(sorted[0].id);
+            }}
+            title="Open Driver View HUD"
           >
             <Compass size={13} /> Driver View
           </button>
@@ -706,7 +748,10 @@ export function DriverBoard({
               type="button"
               className="driver-driveview-pill"
               style={{ fontSize: 13, padding: '10px 18px', background: '#2563eb', color: '#fff', border: 0 }}
-              onClick={() => setDriveViewTripId(activeRide.id)}
+              onClick={() => {
+                setDriveViewTripId(activeRide.id);
+                setActiveTab('drive');
+              }}
             >
               <Compass size={16} /> Open Drive View HUD
             </button>
@@ -968,7 +1013,10 @@ export function DriverBoard({
                         <button
                           type="button"
                           className="driver-driveview-pill"
-                          onClick={() => setDriveViewTripId(t.id)}
+                          onClick={() => {
+                            setDriveViewTripId(t.id);
+                            setActiveTab('drive');
+                          }}
                           title="Open Cockpit Drive View HUD"
                         >
                           <Compass size={14} /> 🚗 Drive View HUD
@@ -1225,10 +1273,207 @@ export function DriverBoard({
         )}
       </div>
 
-      {/* Chauffeur In-Vehicle Drive View Fullscreen Cockpit HUD */}
-      {driveViewTripId && (() => {
-        const t = trips.find((x) => x.id === driveViewTripId);
-        if (!t) return null;
+      {/* Chauffeur In-Vehicle Drive View Fullscreen Cockpit HUD (Always Open in Drive Mode) */}
+      {(activeTab === 'drive' || driveViewTripId) && (() => {
+        const t = driveViewTripId
+          ? trips.find((x) => x.id === driveViewTripId)
+          : (activeRide || sorted.find((x) => getTripStage(x) < 4) || sorted[0] || null);
+
+        // Standby Cockpit HUD when no trip is currently assigned
+        if (!t) {
+          return (
+            <div className="driver-driveview-modal" role="dialog" aria-modal="true" aria-label="Chauffeur Standby Cockpit">
+              {/* Standby Drawer */}
+              {driveMenuOpen && (
+                <div
+                  className="trip-scrim"
+                  style={{ zIndex: 100000, background: 'rgba(0,0,0,0.65)' }}
+                  onClick={() => setDriveMenuOpen(false)}
+                >
+                  <div className="driver-drivemenu-drawer" onClick={(e) => e.stopPropagation()}>
+                    <div className="driver-drivemenu-head">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span className="fleet-live-pulse" />
+                        <strong style={{ fontSize: 15, color: '#38bdf8' }}>Driver View Menu</strong>
+                      </div>
+                      <button type="button" onClick={() => setDriveMenuOpen(false)} aria-label="Close menu">
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    <div className="driver-drivemenu-body">
+                      <div className="driver-drivemenu-section">
+                        <span className="driver-drivemenu-label">Assigned Missions</span>
+                        <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                          No active rides assigned. Central Dispatch will stream new assignments directly to your HUD.
+                        </p>
+                      </div>
+
+                      <div className="driver-drivemenu-section">
+                        <span className="driver-drivemenu-label">Quick Contacts</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <a href="tel:+12015550199" className="driver-drivemenu-link">
+                            <Phone size={15} color="#eab308" /> Call Central Dispatch (Office)
+                          </a>
+                        </div>
+                      </div>
+
+                      <div className="driver-drivemenu-section">
+                        <span className="driver-drivemenu-label">Mission Center</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <button
+                            type="button"
+                            className="driver-drivemenu-link"
+                            onClick={() => {
+                              setDriveMenuOpen(false);
+                              setActiveTab('all');
+                            }}
+                          >
+                            <CheckCircle2 size={15} /> All Trips Schedule
+                          </button>
+                          <button
+                            type="button"
+                            className="driver-drivemenu-link"
+                            onClick={() => {
+                              setDriveMenuOpen(false);
+                              setActiveTab('settings');
+                            }}
+                          >
+                            <Settings size={15} /> Chauffeur Profile &amp; Vehicle
+                          </button>
+                          <button
+                            type="button"
+                            className="driver-drivemenu-link"
+                            style={{ color: '#ef4444' }}
+                            onClick={() => {
+                              setDriveMenuOpen(false);
+                              signOut();
+                            }}
+                          >
+                            <LogOut size={15} /> Sign Out (Chauffeur Portal)
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Standby Topbar */}
+              <header className="driver-driveview-topbar">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="driver-tool-btn"
+                    style={{ background: '#2563eb', color: '#fff', border: 0, fontWeight: 800 }}
+                    onClick={() => setDriveMenuOpen(true)}
+                    aria-label="Open Driver View Menu"
+                  >
+                    <Menu size={16} /> Driver Menu
+                  </button>
+                  <button
+                    type="button"
+                    className="driver-tool-btn"
+                    style={{ background: '#1e293b', color: '#cbd5e1', border: '1px solid #334155' }}
+                    onClick={() => setActiveTab('all')}
+                    title="View All Scheduled Trips"
+                  >
+                    <Calendar size={14} /> All Trips
+                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="fleet-live-pulse" />
+                    <strong style={{ fontSize: 15, letterSpacing: '.03em', color: '#fff' }}>
+                      DRIVE VIEW · CHAUFFEUR STANDBY
+                    </strong>
+                    <span style={{ fontSize: 12, color: '#38bdf8', fontWeight: 700 }}>
+                      (Awaiting Dispatch Assignment)
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <a
+                    href="tel:+12015550199"
+                    className="driver-tool-btn"
+                    style={{ background: '#0284c7', color: '#fff', border: 0, fontWeight: 800 }}
+                  >
+                    <Phone size={14} /> Dispatch Office
+                  </a>
+                </div>
+              </header>
+
+              {/* Standby HUD Body */}
+              <div className="driver-driveview-hud">
+                <div className="driver-hud-destination">
+                  <div className="driver-hud-dest-label">
+                    <MapPin size={16} color="#38bdf8" />
+                    <span>Cockpit Status · Standby &amp; Telemetry Active</span>
+                  </div>
+                  <h2 className="driver-hud-dest-address">Awaiting Next Dispatch Assignment</h2>
+                  <p style={{ margin: '0 0 16px', fontSize: 14, color: '#94a3b8', lineHeight: 1.5 }}>
+                    Your vehicle is connected live to Central Dispatch. When a mission is assigned to your vehicle, your Cockpit HUD will automatically activate with turn-by-turn navigation and passenger routing.
+                  </p>
+                  <div className="driver-hud-nav-buttons">
+                    <a
+                      href="tel:+12015550199"
+                      className="driver-hud-nav-btn google"
+                    >
+                      <Phone size={18} /> Call Dispatch (201) 555-0199
+                    </a>
+                    <button
+                      type="button"
+                      className="driver-hud-nav-btn apple"
+                      onClick={() => void broadcastCurrentOrPickup()}
+                    >
+                      <Radio size={18} /> Ping GPS to Dispatch
+                    </button>
+                  </div>
+                </div>
+
+                {/* Telemetry Readout */}
+                <div className="driver-hud-telemetry">
+                  <div className="driver-hud-tele-card">
+                    <span className="driver-hud-tele-val">{lastCoords?.speed ?? 0} MPH</span>
+                    <span className="driver-hud-tele-lbl">Vehicle Speed</span>
+                  </div>
+                  <div className="driver-hud-tele-card">
+                    <span className="driver-hud-tele-val">
+                      {headingName(lastCoords?.heading ?? 0)} ({Math.round(lastCoords?.heading ?? 0)}°)
+                    </span>
+                    <span className="driver-hud-tele-lbl">Compass Heading</span>
+                  </div>
+                  <div className="driver-hud-tele-card">
+                    <button
+                      type="button"
+                      onClick={() => void broadcastCurrentOrPickup()}
+                      style={{ background: 'transparent', border: 0, padding: 0, textAlign: 'left', cursor: 'pointer', color: 'inherit' }}
+                      title="Tap to refresh location broadcast"
+                    >
+                      <span className="driver-hud-tele-val" style={{ fontSize: 15, color: gpsStatus === 'active' ? '#4ade80' : '#fbbf24', display: 'block' }}>
+                        {gpsStatus === 'active'
+                          ? '🟢 Live GPS Stream'
+                          : gpsStatus === 'denied'
+                          ? '🔴 GPS Off (Tap to Set)'
+                          : '🟡 Standby (Tap to Send)'}
+                      </span>
+                      <span className="driver-hud-tele-lbl">Dispatch Link 📡</span>
+                    </button>
+                  </div>
+                  <div className="driver-hud-tele-card">
+                    <span className="driver-hud-tele-val">{profile.vehicle?.toUpperCase() || 'SEDAN'}</span>
+                    <span className="driver-hud-tele-lbl">Assigned Vehicle</span>
+                  </div>
+                </div>
+
+                {/* Duty Banner */}
+                <div className="driver-hud-big-action done" style={{ background: '#131d2e', border: '1px solid #1e293b', color: '#38bdf8' }}>
+                  <Sparkles size={22} /> CHAUFFEUR ON DUTY · SYSTEM READY FOR DISPATCH
+                </div>
+              </div>
+            </div>
+          );
+        }
+
         const stage = getTripStage(t);
         const isPickupTarget = stage <= 2;
         const targetAddress = isPickupTarget ? t.pickup : t.dropoff;
@@ -1356,18 +1601,16 @@ export function DriverBoard({
                           className="driver-drivemenu-link"
                           onClick={() => {
                             setDriveMenuOpen(false);
-                            setDriveViewTripId(null);
                             setActiveTab('all');
                           }}
                         >
-                          <CheckCircle2 size={15} /> All Trips List
+                          <CheckCircle2 size={15} /> All Trips Schedule
                         </button>
                         <button
                           type="button"
                           className="driver-drivemenu-link"
                           onClick={() => {
                             setDriveMenuOpen(false);
-                            setDriveViewTripId(null);
                             setActiveTab('settings');
                           }}
                         >
@@ -1379,11 +1622,10 @@ export function DriverBoard({
                           style={{ color: '#ef4444' }}
                           onClick={() => {
                             setDriveMenuOpen(false);
-                            setDriveViewTripId(null);
-                            setActiveTab('active');
+                            signOut();
                           }}
                         >
-                          <LogOut size={15} /> Exit Driver View HUD
+                          <LogOut size={15} /> Sign Out (Chauffeur Portal)
                         </button>
                       </div>
                     </div>
@@ -1406,14 +1648,11 @@ export function DriverBoard({
                 <button
                   type="button"
                   className="driver-tool-btn"
-                  style={{ background: '#1e293b', color: '#94a3b8', border: '1px solid #334155' }}
-                  onClick={() => {
-                    setDriveViewTripId(null);
-                    if (activeTab === 'drive') setActiveTab('active');
-                  }}
-                  title="Exit to Dashboard"
+                  style={{ background: '#1e293b', color: '#cbd5e1', border: '1px solid #334155' }}
+                  onClick={() => setActiveTab('all')}
+                  title="View All Scheduled Trips"
                 >
-                  <X size={15} /> Exit
+                  <Calendar size={14} /> All Trips
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span className="fleet-live-pulse" />
@@ -1584,8 +1823,37 @@ export function DriverBoard({
                 )}
 
                 {stage === 4 && (
-                  <div className="driver-hud-big-action done">
-                    <CheckCircle2 size={24} /> TRIP COMPLETED SUCCESSFULLY
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div className="driver-hud-big-action done">
+                      <CheckCircle2 size={24} /> TRIP COMPLETED SUCCESSFULLY
+                    </div>
+                    {(() => {
+                      const nextTrip = sorted.find((x) => x.id !== t.id && getTripStage(x) < 4);
+                      if (nextTrip) {
+                        return (
+                          <button
+                            type="button"
+                            className="driver-hud-big-action accept"
+                            onClick={() => setDriveViewTripId(nextTrip.id)}
+                          >
+                            <Navigation size={22} /> NEXT MISSION: {nextTrip.name || 'Guest'} ({clock(nextTrip.pickupAt)})
+                          </button>
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          className="driver-hud-big-action arrive"
+                          style={{ background: '#1e293b', border: '1px solid #334155' }}
+                          onClick={() => {
+                            setDriveViewTripId(null);
+                            setActiveTab('drive');
+                          }}
+                        >
+                          <Compass size={22} /> RETURN TO STANDBY COCKPIT HUD
+                        </button>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
