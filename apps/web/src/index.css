@@ -1462,5 +1462,44 @@ html.dark .driver-gps-pill.denied { background: #451a1a; color: #fca5a5; }
 .driver-tab-drive { background: linear-gradient(135deg, #0f172a, #1e293b) !important; color: #38bdf8 !important; border-color: #334155 !important; font-weight: 800 !important; }
 .driver-tab-drive.active { background: #2563eb !important; color: #fff !important; border-color: #1d4ed8 !important; }
 
+/* Drawer Stats 2x2 Grid */
+.driver-drawer-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.driver-drawer-stat { background: #131d2e; border: 1px solid #1e293b; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; }
+.driver-drawer-stat-num { font-size: 20px; font-weight: 900; color: #38bdf8; line-height: 1.1; }
+.driver-drawer-stat-label { font-size: 11px; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px; }
+
+/* High-Impact Driver Route Journey Card (Pickup & Dropoff) */
+.driver-route-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.04); margin-top: 6px; }
+html.dark .driver-route-card { background: #131d2e; border-color: #1e293b; box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+
+.driver-route-leg { display: flex; flex-direction: column; gap: 8px; }
+.driver-route-leg-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.driver-route-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; padding: 4px 10px; border-radius: 8px; }
+.driver-route-badge.pickup { background: rgba(34, 197, 94, 0.12); color: #16a34a; border: 1px solid rgba(34, 197, 94, 0.3); }
+html.dark .driver-route-badge.pickup { background: rgba(34, 197, 94, 0.2); color: #4ade80; border-color: rgba(74, 222, 128, 0.35); }
+.driver-route-badge.dropoff { background: rgba(239, 68, 68, 0.12); color: #dc2626; border: 1px solid rgba(239, 68, 68, 0.3); }
+html.dark .driver-route-badge.dropoff { background: rgba(239, 68, 68, 0.2); color: #f87171; border-color: rgba(248, 113, 113, 0.35); }
+.driver-route-badge.stop { background: rgba(234, 179, 8, 0.12); color: #ca8a04; border: 1px solid rgba(234, 179, 8, 0.3); }
+html.dark .driver-route-badge.stop { background: rgba(234, 179, 8, 0.2); color: #facc15; border-color: rgba(250, 204, 21, 0.35); }
+
+.driver-route-address { font-size: 17px; font-weight: 800; line-height: 1.35; color: #0f172a; margin: 0; word-break: break-word; }
+html.dark .driver-route-address { color: #f8fafc; }
+
+.driver-route-nav-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px; }
+.driver-route-nav-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; border-radius: 8px; font-size: 12px; font-weight: 800; text-decoration: none; transition: transform .15s ease, opacity .15s ease; white-space: nowrap; }
+.driver-route-nav-btn:hover { transform: translateY(-1px); opacity: 0.95; }
+.driver-route-nav-btn.google { background: #2563eb; color: #fff; }
+.driver-route-nav-btn.waze { background: #0284c7; color: #fff; }
+.driver-route-nav-btn.apple { background: #334155; color: #f8fafc; border: 1px solid #475569; }
+html:not(.dark) .driver-route-nav-btn.apple { background: #f1f5f9; color: #1e293b; border: 1px solid #cbd5e1; }
+
+.driver-route-connector { position: relative; padding-left: 20px; margin: -2px 0; min-height: 14px; }
+.driver-route-connector::before { content: ''; position: absolute; left: 9px; top: -4px; bottom: -4px; width: 2px; background: repeating-linear-gradient(to bottom, #94a3b8 0, #94a3b8 4px, transparent 4px, transparent 8px); }
+html.dark .driver-route-connector::before { background: repeating-linear-gradient(to bottom, #475569 0, #475569 4px, transparent 4px, transparent 8px); }
+
+.driver-top-filter-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.driver-active-filter-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+html.dark .driver-active-filter-pill { background: #1e293b; color: #38bdf8; border-color: #334155; }
+
 
 
