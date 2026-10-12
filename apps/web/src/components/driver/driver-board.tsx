@@ -7,6 +7,7 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  Compass,
   DoorOpen,
   ExternalLink,
   Flag,
@@ -14,9 +15,11 @@ import {
   LockKeyhole,
   LogOut,
   MapPin,
+  MessageSquare,
   Navigation,
   Phone,
   Plane,
+  Radio,
   RefreshCw,
   Save,
   Search,
@@ -88,6 +91,25 @@ function googleMapsUrl(addr: string) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`;
 }
 
+function wazeUrl(addr: string) {
+  return `https://waze.com/ul?q=${encodeURIComponent(addr)}&navigate=yes`;
+}
+
+function appleMapsUrl(addr: string) {
+  return `https://maps.apple.com/?daddr=${encodeURIComponent(addr)}`;
+}
+
+function headingName(deg: number): string {
+  if (deg >= 337.5 || deg < 22.5) return 'N';
+  if (deg >= 22.5 && deg < 67.5) return 'NE';
+  if (deg >= 67.5 && deg < 112.5) return 'E';
+  if (deg >= 112.5 && deg < 157.5) return 'SE';
+  if (deg >= 157.5 && deg < 202.5) return 'S';
+  if (deg >= 202.5 && deg < 247.5) return 'SW';
+  if (deg >= 247.5 && deg < 292.5) return 'W';
+  return 'NW';
+}
+
 /**
  * Maps the reservation record into a 0-4 lifecycle step:
  * 0: Assigned (waiting for driver to accept)
@@ -125,6 +147,11 @@ export function DriverBoard({
   // Trip action progression state
   const [actingTripId, setActingTripId] = useState('');
   const [actionError, setActionError] = useState('');
+
+  // GPS Broadcast & Drive View State
+  const [gpsStatus, setGpsStatus] = useState<'requesting' | 'active' | 'denied' | 'unsupported'>('requesting');
+  const [lastCoords, setLastCoords] = useState<{ lat: number; lng: number; speed: number; heading: number } | null>(null);
+  const [driveViewTripId, setDriveViewTripId] = useState<string | null>(null);
 
   // Notes state per trip
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
@@ -344,6 +371,100 @@ export function DriverBoard({
   // Filtered trips
   const sorted = useMemo(() => [...trips].sort(compareByPickup), [trips]);
 
+  const activeRide = useMemo(() => {
+    return trips.find((t) => {
+      const stage = getTripStage(t);
+      return stage >= 1 && stage <= 3;
+    });
+  }, [trips]);
+
+  // Keep driver GPS broadcast streaming live to dispatch
+  useEffect(() => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setGpsStatus('unsupported');
+      return;
+    }
+
+    let isMounted = true;
+    let lastReportTime = 0;
+
+    async function reportLocation(lat: number, lng: number, heading: number, speedMph: number) {
+      const now = Date.now();
+      if (now - lastReportTime < 7000) return;
+      lastReportTime = now;
+
+      try {
+        await fetch('/api/driver-location', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${pb.authStore.token}`,
+          },
+          body: JSON.stringify({
+            lat,
+            lng,
+            heading,
+            speed: speedMph,
+            tripId: activeRide?.id,
+            onDuty: true,
+          }),
+        });
+      } catch {
+        // silent
+      }
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        if (!isMounted) return;
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const heading = pos.coords.heading || 0;
+        const speedMph = pos.coords.speed ? Math.round(pos.coords.speed * 2.23694) : 0;
+
+        setGpsStatus('active');
+        setLastCoords({ lat, lng, speed: speedMph, heading });
+        void reportLocation(lat, lng, heading, speedMph);
+      },
+      (err) => {
+        if (!isMounted) return;
+        if (err.code === err.PERMISSION_DENIED) {
+          setGpsStatus('denied');
+        } else {
+          setGpsStatus('active');
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 10000,
+        timeout: 20000,
+      }
+    );
+
+    const intervalId = window.setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (!isMounted) return;
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const heading = pos.coords.heading || 0;
+          const speedMph = pos.coords.speed ? Math.round(pos.coords.speed * 2.23694) : 0;
+          setGpsStatus('active');
+          setLastCoords({ lat, lng, speed: speedMph, heading });
+          void reportLocation(lat, lng, heading, speedMph);
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }, 12000);
+
+    return () => {
+      isMounted = false;
+      navigator.geolocation.clearWatch(watchId);
+      window.clearInterval(intervalId);
+    };
+  }, [activeRide?.id]);
+
   const stats = useMemo(() => {
     const today = new Date();
     let todayCount = 0;
@@ -409,6 +530,16 @@ export function DriverBoard({
           <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / CHAUFFEUR</span></span>
         </a>
         <div className="dashboard-user">
+          <span className={`driver-gps-pill ${gpsStatus === 'active' ? 'active' : gpsStatus === 'denied' ? 'denied' : ''}`}>
+            <span
+              className="driver-duty-dot"
+              style={{
+                background:
+                  gpsStatus === 'active' ? '#22c55e' : gpsStatus === 'denied' ? '#ef4444' : '#eab308',
+              }}
+            />
+            {gpsStatus === 'active' ? 'GPS Live' : gpsStatus === 'denied' ? 'GPS Off' : 'GPS Connecting…'}
+          </span>
           <span className="driver-duty-badge">
             <span className="driver-duty-dot" /> On Duty
           </span>
@@ -429,6 +560,29 @@ export function DriverBoard({
             complete drop-off, and add trip notes.
           </p>
         </div>
+
+        {/* Active Ride In Progress Banner with Instant Drive View Access */}
+        {activeRide && (
+          <div className="driver-active-banner">
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="fleet-live-pulse" />
+                <strong style={{ fontSize: 15, color: '#38bdf8' }}>Active Ride In Progress: {activeRide.name || 'Guest'}</strong>
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: '#94a3b8' }}>
+                {getTripStage(activeRide) <= 2 ? `Heading to Pickup: ${activeRide.pickup}` : `En Route to Dropoff: ${activeRide.dropoff}`}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="driver-driveview-pill"
+              style={{ fontSize: 13, padding: '10px 18px', background: '#2563eb', color: '#fff', border: 0 }}
+              onClick={() => setDriveViewTripId(activeRide.id)}
+            >
+              <Compass size={16} /> Open Drive View HUD
+            </button>
+          </div>
+        )}
 
         {/* Driver Summary Statistics Bar */}
         <div className="driver-stats-grid">
@@ -662,6 +816,23 @@ export function DriverBoard({
                           {t.notes}
                         </div>
                       )}
+
+                      {/* Drive View HUD Shortcut Button */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: '6px 0' }}>
+                        <button
+                          type="button"
+                          className="driver-driveview-pill"
+                          onClick={() => setDriveViewTripId(t.id)}
+                          title="Open Cockpit Drive View HUD"
+                        >
+                          <Compass size={14} /> 🚗 Drive View HUD
+                        </button>
+                        {stage >= 1 && stage <= 3 && (
+                          <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                            <span className="fleet-live-pulse" /> Live Trip GPS Active
+                          </span>
+                        )}
+                      </div>
 
                       {/* 4-Step Interactive Chauffeur Workflow Pipeline */}
                       <div className="driver-pipeline-container">
@@ -907,6 +1078,229 @@ export function DriverBoard({
           </div>
         )}
       </div>
+
+      {/* Chauffeur In-Vehicle Drive View Fullscreen Cockpit HUD */}
+      {driveViewTripId && (() => {
+        const t = trips.find((x) => x.id === driveViewTripId);
+        if (!t) return null;
+        const stage = getTripStage(t);
+        const isPickupTarget = stage <= 2;
+        const targetAddress = isPickupTarget ? t.pickup : t.dropoff;
+        const targetLabel = isPickupTarget ? 'Passenger Pickup' : 'Passenger Dropoff';
+        const isBusy = actingTripId === t.id;
+        const isNoteBusy = savingNoteId === t.id;
+        const isNoteSaved = savedNoteId === t.id;
+        const currentDraft = notesDraft[t.id] ?? t.driverNotes ?? '';
+
+        return (
+          <div className="driver-driveview-modal" role="dialog" aria-modal="true" aria-label="Chauffeur Drive View">
+            <header className="driver-driveview-topbar">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button
+                  type="button"
+                  className="driver-tool-btn"
+                  style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
+                  onClick={() => setDriveViewTripId(null)}
+                >
+                  <X size={16} /> Exit Drive View
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="fleet-live-pulse" />
+                  <strong style={{ fontSize: 15, letterSpacing: '.03em', color: '#fff' }}>
+                    DRIVE VIEW · {t.name || 'Guest'}
+                  </strong>
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                    (RB-{t.id.slice(-8).toUpperCase()})
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {t.phone && (
+                  <>
+                    <a
+                      href={`tel:${t.phone.replace(/[^\d+]/g, '')}`}
+                      className="driver-tool-btn"
+                      style={{ background: '#2563eb', color: '#fff', border: 0, fontWeight: 800 }}
+                    >
+                      <Phone size={14} /> Call Guest
+                    </a>
+                    <a
+                      href={`sms:${t.phone.replace(/[^\d+]/g, '')}`}
+                      className="driver-tool-btn"
+                      style={{ background: '#0284c7', color: '#fff', border: 0, fontWeight: 800 }}
+                    >
+                      <MessageSquare size={14} /> SMS
+                    </a>
+                  </>
+                )}
+              </div>
+            </header>
+
+            <div className="driver-driveview-hud">
+              {/* Destination & Instant Turn-by-Turn GPS Navigation Card */}
+              <div className="driver-hud-destination">
+                <div className="driver-hud-dest-label">
+                  <MapPin size={16} color="#38bdf8" />
+                  <span>Next Destination · {targetLabel}</span>
+                  {t.flight && (
+                    <span style={{ background: '#1e293b', color: '#7dd3fc', padding: '2px 8px', borderRadius: 4, marginLeft: 'auto' }}>
+                      Flight: {t.flight}
+                    </span>
+                  )}
+                </div>
+                <h2 className="driver-hud-dest-address">{targetAddress || 'Address to be confirmed'}</h2>
+
+                {t.extraStop && (
+                  <div style={{ fontSize: 13, color: '#facc15', marginBottom: 14 }}>
+                    ⚠️ Extra Stop on route: {t.extraStop}
+                  </div>
+                )}
+
+                {targetAddress && (
+                  <div className="driver-hud-nav-buttons">
+                    <a
+                      href={googleMapsUrl(targetAddress)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="driver-hud-nav-btn google"
+                    >
+                      <Navigation size={18} /> Google Maps
+                    </a>
+                    <a
+                      href={wazeUrl(targetAddress)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="driver-hud-nav-btn waze"
+                    >
+                      <Compass size={18} /> Waze
+                    </a>
+                    <a
+                      href={appleMapsUrl(targetAddress)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="driver-hud-nav-btn apple"
+                    >
+                      <Navigation size={18} /> Apple Maps
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Chauffeur Telemetry Cockpit Readout */}
+              <div className="driver-hud-telemetry">
+                <div className="driver-hud-tele-card">
+                  <span className="driver-hud-tele-val">{lastCoords?.speed ?? 0} MPH</span>
+                  <span className="driver-hud-tele-lbl">Vehicle Speed</span>
+                </div>
+                <div className="driver-hud-tele-card">
+                  <span className="driver-hud-tele-val">
+                    {headingName(lastCoords?.heading ?? 0)} ({Math.round(lastCoords?.heading ?? 0)}°)
+                  </span>
+                  <span className="driver-hud-tele-lbl">Compass Heading</span>
+                </div>
+                <div className="driver-hud-tele-card">
+                  <span className="driver-hud-tele-val" style={{ fontSize: 16, color: gpsStatus === 'active' ? '#4ade80' : '#f87171' }}>
+                    {gpsStatus === 'active' ? '🟢 Live Broadcasting' : gpsStatus === 'denied' ? '🔴 GPS Denied' : '🟡 Linking…'}
+                  </span>
+                  <span className="driver-hud-tele-lbl">Dispatch GPS Link</span>
+                </div>
+                <div className="driver-hud-tele-card">
+                  <span className="driver-hud-tele-val">{clock(t.pickupAt)}</span>
+                  <span className="driver-hud-tele-lbl">Scheduled Time</span>
+                </div>
+              </div>
+
+              {/* Giant Mission Step Progression Button */}
+              <div>
+                {stage === 0 && (
+                  <button
+                    type="button"
+                    className="driver-hud-big-action accept"
+                    disabled={isBusy}
+                    onClick={() => handleTripAction(t.id, 'accept')}
+                  >
+                    {isBusy ? <Loader2 size={24} className="animate-spin" /> : <Check size={24} strokeWidth={3} />}
+                    ACCEPT RIDE &amp; START ROUTE
+                  </button>
+                )}
+
+                {stage === 1 && (
+                  <button
+                    type="button"
+                    className="driver-hud-big-action arrive"
+                    disabled={isBusy}
+                    onClick={() => handleTripAction(t.id, 'arrive')}
+                  >
+                    {isBusy ? <Loader2 size={24} className="animate-spin" /> : <MapPin size={24} strokeWidth={3} />}
+                    I’VE ARRIVED AT PICKUP LOCATION
+                  </button>
+                )}
+
+                {stage === 2 && (
+                  <button
+                    type="button"
+                    className="driver-hud-big-action pickup"
+                    disabled={isBusy}
+                    onClick={() => handleTripAction(t.id, 'pickup')}
+                  >
+                    {isBusy ? <Loader2 size={24} className="animate-spin" /> : <UserCheck size={24} strokeWidth={3} />}
+                    PASSENGER ON BOARD (PROCEED TO DROPOFF)
+                  </button>
+                )}
+
+                {stage === 3 && (
+                  <button
+                    type="button"
+                    className="driver-hud-big-action dropoff"
+                    disabled={isBusy}
+                    onClick={() => handleTripAction(t.id, 'dropoff')}
+                  >
+                    {isBusy ? <Loader2 size={24} className="animate-spin" /> : <Flag size={24} strokeWidth={3} />}
+                    COMPLETE TRIP (PASSENGER SAFELY DROPPED OFF)
+                  </button>
+                )}
+
+                {stage === 4 && (
+                  <div className="driver-hud-big-action done">
+                    <CheckCircle2 size={24} /> TRIP COMPLETED SUCCESSFULLY
+                  </div>
+                )}
+              </div>
+
+              {/* In-Drive Notes Section */}
+              <div className="driver-hud-destination" style={{ padding: 18 }}>
+                <div className="driver-hud-dest-label">
+                  <span>Trip Notes &amp; Status Report</span>
+                  {t.driverNotes && (
+                    <span style={{ color: '#4ade80', fontSize: 11, marginLeft: 'auto' }}>
+                      ✓ Note recorded in database
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  className="driver-note-textarea"
+                  rows={2}
+                  style={{ background: '#090d16', borderColor: '#334155', color: '#fff' }}
+                  value={currentDraft}
+                  onChange={(e) => setNotesDraft((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                  placeholder="Record toll receipts, passenger notes, luggage or delay details..."
+                />
+                <button
+                  type="button"
+                  className={`driver-note-save-btn${isNoteSaved ? ' saved' : ''}`}
+                  style={{ marginTop: 8 }}
+                  disabled={isNoteBusy}
+                  onClick={() => handleSaveNote(t.id)}
+                >
+                  {isNoteBusy ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                  {isNoteSaved ? 'Note Saved!' : isNoteBusy ? 'Saving…' : 'Save Trip Note'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </main>
   );
 }

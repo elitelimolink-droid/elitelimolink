@@ -6,6 +6,7 @@ import {
   CarFront,
   Check,
   ChevronDown,
+  Compass,
   Copy,
   CreditCard,
   DoorOpen,
@@ -15,6 +16,7 @@ import {
   Loader2,
   Menu,
   MoreVertical,
+  Navigation,
   Plane,
   Plus,
   RefreshCw,
@@ -39,6 +41,7 @@ import { MapsStatusCard } from '@/components/dashboard/maps-status-card';
 import { PaymentStatusCard } from '@/components/dashboard/payment-status-card';
 import { BookingLinkCard } from '@/components/dashboard/booking-link-card';
 import { DriversPanel } from '@/components/dashboard/drivers-panel';
+import { FleetMap } from '@/components/dashboard/fleet-map';
 import { ActivityStream } from '@/components/dashboard/activity-stream';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
 
@@ -165,7 +168,8 @@ export function TripBoard({
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [panel, setPanel] = useState<'trips' | 'activity' | 'settings' | 'drivers'>('trips');
+  const [panel, setPanel] = useState<'trips' | 'activity' | 'settings' | 'drivers' | 'fleet'>('trips');
+  const [focusedFleetDriverId, setFocusedFleetDriverId] = useState<string | undefined>(undefined);
   const [notesOpen, setNotesOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [range, setRange] = useState<RangeId>('30');
@@ -647,6 +651,18 @@ export function TripBoard({
           <ThemeToggle className="trip-icon-btn" label="Toggle day or night mode" />
           <button
             type="button"
+            className={`trip-icon-btn${panel === 'fleet' ? ' trip-icon-btn-active' : ''}`}
+            aria-label="Drive View & Fleet Map"
+            title="Drive View & Canlı Harita Takibi"
+            onClick={() => {
+              setFocusedFleetDriverId(undefined);
+              setPanel(panel === 'fleet' ? 'trips' : 'fleet');
+            }}
+          >
+            <Navigation size={22} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
             className="trip-icon-btn"
             aria-label="Search reservations"
             aria-expanded={searchOpen}
@@ -855,6 +871,20 @@ export function TripBoard({
                                     {driverName(r.driver) && (
                                       <span><Users size={14} /> {driverName(r.driver)}</span>
                                     )}
+                                    {r.driver && (
+                                      <button
+                                        type="button"
+                                        className="trip-track-pill"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setFocusedFleetDriverId(r.driver);
+                                          setPanel('fleet');
+                                        }}
+                                        title="Şoförü Canlı Haritada Gör (Drive View)"
+                                      >
+                                        <Compass size={12} /> Harita &amp; Drive View
+                                      </button>
+                                    )}
                                     {r.estimatedFareText && (
                                       <span className="trip-card-fare">{r.estimatedFareText}</span>
                                     )}
@@ -897,6 +927,17 @@ export function TripBoard({
             </div>
           )}
         </>
+      ) : panel === 'fleet' ? (
+        <div className="trip-settings">
+          <div className="trip-settings-head">
+            <h2>Drive View · Live Fleet Tracking</h2>
+            <button type="button" onClick={() => setPanel('trips')}>Back to trips</button>
+          </div>
+          <FleetMap
+            initialFocusedDriverId={focusedFleetDriverId}
+            onClose={() => setPanel('trips')}
+          />
+        </div>
       ) : panel === 'activity' ? (
         <div className="trip-settings">
           <div className="trip-settings-head">
@@ -944,6 +985,7 @@ export function TripBoard({
             </div>
             {email && <p className="trip-drawer-email">{email}</p>}
             <button type="button" onClick={() => { setPanel('trips'); setMenuOpen(false); }}>Reservations</button>
+            <button type="button" onClick={() => { setFocusedFleetDriverId(undefined); setPanel('fleet'); setMenuOpen(false); }}>Drive View &amp; Fleet Map</button>
             <button type="button" onClick={() => { setPanel('activity'); setMenuOpen(false); }}>Live activity</button>
             <button type="button" onClick={() => { setPanel('settings'); setMenuOpen(false); }}>Pricing & settings</button>
             <button type="button" onClick={() => { setManageOpen(true); setMenuOpen(false); }}>Manage businesses</button>

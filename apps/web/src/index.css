@@ -1357,3 +1357,83 @@ html.dark .activity-step { background: #1e293b; color: var(--ink-light); }
 html.dark .activity-stream-summary { color: var(--ink-light); }
 html.dark .activity-time { color: var(--ink-light); }
 
+/* Live Fleet & Drive View (Map + Live Chauffeur Tracking) */
+.fleet-view-container { background: #fff; border: 1px solid var(--border-ride); border-radius: 20px; overflow: hidden; box-shadow: 0 12px 36px -20px #1d3b6530; display: flex; flex-direction: column; margin-bottom: 24px; }
+.fleet-view-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid #e8eff9; background: #fafcff; flex-wrap: wrap; gap: 12px; }
+.fleet-live-pulse { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px #bbf7d0; animation: livePulse 1.8s infinite; flex: none; }
+.fleet-grid { display: grid; grid-template-columns: 340px 1fr; height: 640px; position: relative; }
+@media (max-width: 860px) { .fleet-grid { grid-template-columns: 1fr; height: auto; } }
+.fleet-sidebar { border-right: 1px solid #e8eff9; background: #fff; display: flex; flex-direction: column; padding: 14px; overflow-y: auto; max-height: 640px; }
+.fleet-roster { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; flex: 1; }
+.fleet-driver-card { background: #fbfcfe; border: 1px solid #e1ecfa; border-radius: 12px; padding: 12px 14px; text-align: left; cursor: pointer; transition: all .15s ease; display: flex; flex-direction: column; gap: 6px; }
+.fleet-driver-card:hover { border-color: #93c5fd; background: #f4f8ff; transform: translateY(-1px); }
+.fleet-driver-card.selected { border-color: #2563eb; background: #eff6ff; box-shadow: 0 4px 14px -6px rgba(37,99,235,0.25); }
+.fleet-status-pill { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .05em; }
+.fleet-status-pill.active { background: #dbeafe; color: #1e40af; }
+.fleet-status-pill.idle { background: #f1f5f9; color: #475569; }
+.fleet-status-pill.offline { background: #fee2e2; color: #991b1b; }
+.fleet-driver-trip-summary { background: #fff; border: 1px solid #dbeafe; border-radius: 8px; padding: 6px 10px; font-size: 11px; margin-top: 4px; }
+.fleet-map-wrapper { position: relative; flex: 1; height: 100%; min-height: 480px; }
+.fleet-leaflet-map { width: 100%; height: 100%; min-height: 480px; z-index: 1; }
+.fleet-floating-card { position: absolute; bottom: 20px; left: 20px; right: 20px; max-width: 440px; background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(12px); border: 1px solid rgba(219, 234, 254, 0.9); border-radius: 16px; padding: 16px 18px; box-shadow: 0 20px 40px -15px rgba(29, 59, 101, 0.25); z-index: 1000; animation: addonReveal 0.2s ease-out; }
+
+/* Custom Driver Car Pin Marker on Leaflet */
+.driver-map-pin { position: relative; width: 38px; height: 38px; display: grid; place-items: center; cursor: pointer; }
+.driver-pin-pulse { position: absolute; width: 38px; height: 38px; border-radius: 50%; background: var(--pin-color, #2563eb); opacity: 0.25; animation: livePulse 2s infinite; }
+.driver-pin-body { position: relative; width: 32px; height: 32px; border-radius: 50%; background: var(--pin-color, #2563eb); color: #fff; display: grid; place-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.22); border: 2px solid #fff; z-index: 2; transition: transform .15s ease; }
+.driver-map-pin:hover .driver-pin-body, .driver-map-pin.selected .driver-pin-body { transform: scale(1.15); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
+.driver-pin-label { position: absolute; bottom: -18px; background: #1e293b; color: #fff; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 4px; white-space: nowrap; pointer-events: none; z-index: 3; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+
+/* Dark mode for fleet map */
+html.dark .fleet-view-container { background: #131c2b; border-color: var(--border-ride); }
+html.dark .fleet-view-head { background: #16202f; border-color: var(--border-ride); }
+html.dark .fleet-sidebar { background: #131c2b; border-color: var(--border-ride); }
+html.dark .fleet-driver-card { background: #16202f; border-color: var(--border-ride); }
+html.dark .fleet-driver-card.selected { background: #1e2b40; border-color: #3b82f6; }
+html.dark .fleet-driver-trip-summary { background: #131c2b; border-color: #27374f; }
+html.dark .fleet-floating-card { background: rgba(19, 28, 43, 0.95); border-color: #2a3a55; }
+
+/* Drive View Pill in Dashboard & Driver Portal */
+.trip-track-pill { display: inline-flex; align-items: center; gap: 5px; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 999px; padding: 3px 9px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all .15s ease; }
+.trip-track-pill:hover { background: #dbeafe; border-color: #93c5fd; transform: translateY(-1px); }
+html.dark .trip-track-pill { background: #1e2b40; color: #60a5fa; border-color: #2563eb; }
+
+.driver-driveview-pill { display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #1e293b, #0f172a); color: #38bdf8; border: 1px solid #334155; border-radius: 8px; padding: 7px 12px; font-size: 12px; font-weight: 800; letter-spacing: .02em; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.12); transition: all .15s ease; }
+.driver-driveview-pill:hover { background: #0f172a; border-color: #38bdf8; color: #7dd3fc; transform: translateY(-1px); }
+
+.driver-gps-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: #f1f5f9; color: #334155; }
+.driver-gps-pill.active { background: #dcfce7; color: #15803d; }
+.driver-gps-pill.denied { background: #fee2e2; color: #b91c1c; }
+html.dark .driver-gps-pill.active { background: #14532d; color: #86efac; }
+html.dark .driver-gps-pill.denied { background: #451a1a; color: #fca5a5; }
+
+.driver-active-banner { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; border-radius: 16px; padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; box-shadow: 0 10px 25px -10px rgba(0,0,0,0.3); color: #f8fafc; }
+
+/* Chauffeur Drive View Fullscreen Cockpit HUD */
+.driver-driveview-modal { position: fixed; inset: 0; z-index: 99999; background: #090d16; color: #f8fafc; display: flex; flex-direction: column; overflow-y: auto; animation: addonReveal 0.2s ease-out; }
+.driver-driveview-topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #1e293b; background: #0f172a; gap: 12px; flex-wrap: wrap; }
+.driver-driveview-hud { max-width: 900px; width: 100%; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; gap: 18px; }
+.driver-hud-destination { background: #131d2e; border: 1px solid #1e293b; border-radius: 18px; padding: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+.driver-hud-dest-label { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #38bdf8; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.driver-hud-dest-address { font-size: 22px; font-weight: 800; line-height: 1.3; color: #fff; margin: 0 0 16px; }
+.driver-hud-nav-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+.driver-hud-nav-btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border-radius: 12px; font-size: 14px; font-weight: 800; text-decoration: none; transition: transform .15s ease, opacity .15s ease; flex: 1; min-width: 140px; justify-content: center; }
+.driver-hud-nav-btn:hover { transform: translateY(-2px); opacity: 0.95; }
+.driver-hud-nav-btn.google { background: #2563eb; color: #fff; }
+.driver-hud-nav-btn.waze { background: #0284c7; color: #fff; }
+.driver-hud-nav-btn.apple { background: #334155; color: #fff; border: 1px solid #475569; }
+
+.driver-hud-telemetry { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.driver-hud-tele-card { background: #131d2e; border: 1px solid #1e293b; border-radius: 14px; padding: 14px 18px; display: flex; flex-direction: column; gap: 4px; }
+.driver-hud-tele-val { font-size: 24px; font-weight: 900; color: #fff; font-variant-numeric: tabular-nums; }
+.driver-hud-tele-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: .05em; }
+
+.driver-hud-big-action { width: 100%; padding: 20px 24px; border-radius: 16px; font-size: 18px; font-weight: 900; letter-spacing: .03em; display: flex; align-items: center; justify-content: center; gap: 12px; cursor: pointer; border: 0; color: #fff; box-shadow: 0 10px 25px rgba(0,0,0,0.4); transition: transform .15s ease, filter .15s ease; }
+.driver-hud-big-action:hover { transform: translateY(-2px); filter: brightness(1.08); }
+.driver-hud-big-action.accept { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+.driver-hud-big-action.arrive { background: linear-gradient(135deg, #d97706, #b45309); }
+.driver-hud-big-action.pickup { background: linear-gradient(135deg, #16a34a, #15803d); }
+.driver-hud-big-action.dropoff { background: linear-gradient(135deg, #9333ea, #7e22ce); }
+.driver-hud-big-action.done { background: #334155; color: #94a3b8; cursor: default; }
+
+

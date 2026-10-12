@@ -21,6 +21,7 @@ export default [
 	route('api/activity', 'routes/api.activity.ts'),
 	route('api/fare-quote', 'routes/api.fare-quote.ts'),
 	route('api/driver-trip', 'routes/api.driver-trip.ts'),
+	route('api/driver-location', 'routes/api.driver-location.ts'),
 	route('api/payment-complete', 'routes/api.payment-complete.ts'),
 	route('api/payment-abandon', 'routes/api.payment-abandon.ts'),
 	route('api/route-map', 'routes/api.route-map.ts'),
