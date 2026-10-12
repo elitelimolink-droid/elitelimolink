@@ -714,9 +714,23 @@ export function TripBoard({
         <>
           <div className="trip-sortbar">
             <strong>{summary}</strong>
-            <button type="button" className="trip-icon-btn" aria-label="Filter and sort" onClick={() => setFilterOpen(true)}>
-              <Filter size={24} strokeWidth={2} />
-            </button>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                className="trip-track-pill"
+                style={{ padding: '5px 12px', fontSize: 12 }}
+                onClick={() => {
+                  setFocusedFleetDriverId(undefined);
+                  setPanel('fleet');
+                }}
+                title="Open Driver View & Fleet Map"
+              >
+                <Compass size={14} /> Driver View &amp; Harita
+              </button>
+              <button type="button" className="trip-icon-btn" aria-label="Filter and sort" onClick={() => setFilterOpen(true)}>
+                <Filter size={24} strokeWidth={2} />
+              </button>
+            </div>
           </div>
 
           {businesses.length > 0 && (
@@ -985,11 +999,12 @@ export function TripBoard({
             </div>
             {email && <p className="trip-drawer-email">{email}</p>}
             <button type="button" onClick={() => { setPanel('trips'); setMenuOpen(false); }}>Reservations</button>
-            <button type="button" onClick={() => { setFocusedFleetDriverId(undefined); setPanel('fleet'); setMenuOpen(false); }}>Drive View &amp; Fleet Map</button>
+            <button type="button" onClick={() => { setFocusedFleetDriverId(undefined); setPanel('fleet'); setMenuOpen(false); }}>🚗 Driver View &amp; Harita Takibi</button>
             <button type="button" onClick={() => { setPanel('activity'); setMenuOpen(false); }}>Live activity</button>
-            <button type="button" onClick={() => { setPanel('settings'); setMenuOpen(false); }}>Pricing & settings</button>
+            <button type="button" onClick={() => { setPanel('settings'); setMenuOpen(false); }}>Pricing &amp; settings</button>
             <button type="button" onClick={() => { setManageOpen(true); setMenuOpen(false); }}>Manage businesses</button>
             <button type="button" onClick={() => { setPanel('drivers'); setMenuOpen(false); }}>Drivers</button>
+            <Link to="/driver" onClick={() => setMenuOpen(false)}>🚗 Chauffeur Portal (/driver)</Link>
             <Link to="/dispatch" onClick={() => setMenuOpen(false)}>Dispatch center</Link>
             <Link to="/">Booking site</Link>
             <button type="button" className="trip-signout" onClick={signOut}>Sign out</button>

@@ -15,6 +15,7 @@ import {
   LockKeyhole,
   LogOut,
   MapPin,
+  Menu,
   MessageSquare,
   Navigation,
   Phone,
@@ -141,8 +142,9 @@ export function DriverBoard({
   const [error, setError] = useState('');
 
   // Tab & search filtering
-  const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'all' | 'settings'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'drive' | 'completed' | 'all' | 'settings'>('active');
   const [search, setSearch] = useState('');
+  const [driveMenuOpen, setDriveMenuOpen] = useState(false);
 
   // Trip action progression state
   const [actingTripId, setActingTripId] = useState('');
@@ -530,6 +532,19 @@ export function DriverBoard({
           <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / CHAUFFEUR</span></span>
         </a>
         <div className="dashboard-user">
+          <button
+            type="button"
+            className="driver-driveview-pill"
+            style={{ padding: '6px 12px', fontSize: 12 }}
+            onClick={() => {
+              if (activeRide) setDriveViewTripId(activeRide.id);
+              else if (sorted.length > 0) setDriveViewTripId(sorted[0].id);
+              else setActiveTab('drive');
+            }}
+            title="Open Driver View"
+          >
+            <Compass size={13} /> Driver View
+          </button>
           <span className={`driver-gps-pill ${gpsStatus === 'active' ? 'active' : gpsStatus === 'denied' ? 'denied' : ''}`}>
             <span
               className="driver-duty-dot"
@@ -616,6 +631,23 @@ export function DriverBoard({
             >
               <Sparkles size={14} /> Active &amp; Upcoming
               <span className="badge-pill">{stats.active}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'drive'}
+              className={`driver-tab-btn driver-tab-drive${activeTab === 'drive' ? ' active' : ''}`}
+              onClick={() => {
+                setActiveTab('drive');
+                if (activeRide) {
+                  setDriveViewTripId(activeRide.id);
+                } else if (sorted.length > 0) {
+                  setDriveViewTripId(sorted[0].id);
+                }
+              }}
+            >
+              <Compass size={14} /> 🚗 Driver View
+              {activeRide && <span className="fleet-live-pulse" />}
             </button>
             <button
               type="button"
@@ -1094,15 +1126,180 @@ export function DriverBoard({
 
         return (
           <div className="driver-driveview-modal" role="dialog" aria-modal="true" aria-label="Chauffeur Drive View">
+            {/* Driver View Slide-out Menu Drawer */}
+            {driveMenuOpen && (
+              <div
+                className="trip-scrim"
+                style={{ zIndex: 100000, background: 'rgba(0,0,0,0.65)' }}
+                onClick={() => setDriveMenuOpen(false)}
+              >
+                <div className="driver-drivemenu-drawer" onClick={(e) => e.stopPropagation()}>
+                  <div className="driver-drivemenu-head">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className="fleet-live-pulse" />
+                      <strong style={{ fontSize: 15, color: '#38bdf8' }}>Driver View Menu</strong>
+                    </div>
+                    <button type="button" onClick={() => setDriveMenuOpen(false)} aria-label="Close menu">
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="driver-drivemenu-body">
+                    {/* Switch Active Mission */}
+                    <div className="driver-drivemenu-section">
+                      <span className="driver-drivemenu-label">Switch Mission / Assigned Rides</span>
+                      {sorted.filter((x) => getTripStage(x) < 4).length === 0 ? (
+                        <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>No other active trips.</p>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {sorted
+                            .filter((x) => getTripStage(x) < 4)
+                            .map((trip) => (
+                              <button
+                                key={trip.id}
+                                type="button"
+                                className={`driver-drivemenu-item${trip.id === driveViewTripId ? ' active' : ''}`}
+                                onClick={() => {
+                                  setDriveViewTripId(trip.id);
+                                  setDriveMenuOpen(false);
+                                }}
+                              >
+                                <div>
+                                  <strong>{trip.name || 'Guest'}</strong>
+                                  <small>{clock(trip.pickupAt)} · {trip.pickup?.slice(0, 22)}…</small>
+                                </div>
+                                {trip.id === driveViewTripId && <Check size={16} color="#38bdf8" />}
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Turn-by-Turn Navigation Apps */}
+                    <div className="driver-drivemenu-section">
+                      <span className="driver-drivemenu-label">Turn-by-Turn GPS Navigation</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {targetAddress && (
+                          <>
+                            <a
+                              href={googleMapsUrl(targetAddress)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="driver-drivemenu-link"
+                              onClick={() => setDriveMenuOpen(false)}
+                            >
+                              <Navigation size={15} color="#3b82f6" /> Launch Google Maps
+                            </a>
+                            <a
+                              href={wazeUrl(targetAddress)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="driver-drivemenu-link"
+                              onClick={() => setDriveMenuOpen(false)}
+                            >
+                              <Compass size={15} color="#0284c7" /> Launch Waze
+                            </a>
+                            <a
+                              href={appleMapsUrl(targetAddress)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="driver-drivemenu-link"
+                              onClick={() => setDriveMenuOpen(false)}
+                            >
+                              <Navigation size={15} color="#94a3b8" /> Launch Apple Maps
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Fast Contacts */}
+                    <div className="driver-drivemenu-section">
+                      <span className="driver-drivemenu-label">Quick Contacts</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {t.phone && (
+                          <>
+                            <a href={`tel:${t.phone.replace(/[^\d+]/g, '')}`} className="driver-drivemenu-link">
+                              <Phone size={15} color="#22c55e" /> Call Passenger ({t.phone})
+                            </a>
+                            <a href={`sms:${t.phone.replace(/[^\d+]/g, '')}`} className="driver-drivemenu-link">
+                              <MessageSquare size={15} color="#38bdf8" /> SMS Passenger
+                            </a>
+                          </>
+                        )}
+                        <a href="tel:+12015550199" className="driver-drivemenu-link">
+                          <Phone size={15} color="#eab308" /> Call Central Dispatch (Office)
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Navigation To Other Tabs */}
+                    <div className="driver-drivemenu-section">
+                      <span className="driver-drivemenu-label">Mission Center</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <button
+                          type="button"
+                          className="driver-drivemenu-link"
+                          onClick={() => {
+                            setDriveMenuOpen(false);
+                            setDriveViewTripId(null);
+                            setActiveTab('all');
+                          }}
+                        >
+                          <CheckCircle2 size={15} /> All Trips List
+                        </button>
+                        <button
+                          type="button"
+                          className="driver-drivemenu-link"
+                          onClick={() => {
+                            setDriveMenuOpen(false);
+                            setDriveViewTripId(null);
+                            setActiveTab('settings');
+                          }}
+                        >
+                          <Settings size={15} /> Chauffeur Profile &amp; Vehicle
+                        </button>
+                        <button
+                          type="button"
+                          className="driver-drivemenu-link"
+                          style={{ color: '#ef4444' }}
+                          onClick={() => {
+                            setDriveMenuOpen(false);
+                            setDriveViewTripId(null);
+                            setActiveTab('active');
+                          }}
+                        >
+                          <LogOut size={15} /> Exit Driver View HUD
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <header className="driver-driveview-topbar">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="driver-tool-btn"
-                  style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155' }}
-                  onClick={() => setDriveViewTripId(null)}
+                  style={{ background: '#2563eb', color: '#fff', border: 0, fontWeight: 800 }}
+                  onClick={() => setDriveMenuOpen(true)}
+                  aria-label="Open Driver View Menu"
                 >
-                  <X size={16} /> Exit Drive View
+                  <Menu size={16} /> Driver Menu
+                </button>
+                <button
+                  type="button"
+                  className="driver-tool-btn"
+                  style={{ background: '#1e293b', color: '#94a3b8', border: '1px solid #334155' }}
+                  onClick={() => {
+                    setDriveViewTripId(null);
+                    if (activeTab === 'drive') setActiveTab('active');
+                  }}
+                  title="Exit to Dashboard"
+                >
+                  <X size={15} /> Exit
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span className="fleet-live-pulse" />
