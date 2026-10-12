@@ -67,7 +67,7 @@ async function photonLookup(address: string, signal?: AbortSignal): Promise<Phot
  */
 export const loader = withApi(async ({ request }) => {
   const url = new URL(request.url);
-  const address = (url.searchParams.get('address') ?? '').trim();
+  const address = (url.searchParams.get('address') ?? url.searchParams.get('q') ?? '').trim();
   const key = process.env.GOOGLE_MAPS_API_KEY;
 
   if (!address) {

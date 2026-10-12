@@ -47,33 +47,46 @@ function decodePayload(token: string): { id?: string; collectionId?: string } | 
   }
 }
 
+function extractToken(request: Request): string {
+  const auth = request.headers.get('Authorization') || request.headers.get('authorization') || '';
+  if (auth) {
+    const clean = auth.replace(/^Bearer\s+/i, '').trim();
+    if (clean) return clean;
+  }
+  const cookie = request.headers.get('cookie') || request.headers.get('Cookie') || '';
+  const match = cookie.match(/pb_auth=([^;]+)/);
+  if (match) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(match[1]));
+      if (parsed?.token) return parsed.token;
+    } catch {}
+  }
+  return '';
+}
+
 /**
- * Validates the caller from the Authorization Bearer token.
+ * Validates the caller from the Authorization Bearer token or pb_auth cookie.
  */
-async function verifyCaller(authHeader: string | null): Promise<{ id: string; isDriver: boolean; isOperator: boolean }> {
-  if (!authHeader) throw apiError(401, 'Authentication required.');
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+async function verifyCaller(request: Request): Promise<{ id: string; isDriver: boolean; isOperator: boolean }> {
+  const token = extractToken(request);
   if (!token) throw apiError(401, 'Authentication required.');
 
   const payload = decodePayload(token);
   const callerId = payload?.id;
   if (!callerId) throw apiError(401, 'Invalid session token.');
 
-  const client = new PocketBase(PB_URL());
-  client.autoCancellation(false);
-  client.authStore.save(token, null);
+  // Check operators (users collection) first via PocketBase admin
+  try {
+    await pocketbaseAdmin.getRecord('users', callerId);
+    return { id: callerId, isDriver: false, isOperator: true };
+  } catch {
+    // Check drivers
+  }
 
   // Check drivers collection
   try {
-    await client.collection('drivers').getOne(callerId);
+    await pocketbaseAdmin.getRecord('drivers', callerId);
     return { id: callerId, isDriver: true, isOperator: false };
-  } catch {
-    // Check operators
-  }
-
-  try {
-    await client.collection('users').getOne(callerId);
-    return { id: callerId, isDriver: false, isOperator: true };
   } catch {
     throw apiError(401, 'Session expired or user not found.');
   }
@@ -84,7 +97,7 @@ async function verifyCaller(authHeader: string | null): Promise<{ id: string; is
  * and current active assigned reservations for the operator's Drive View / Live Fleet Map.
  */
 export const loader = withApi(async ({ request }) => {
-  await verifyCaller(request.headers.get('Authorization'));
+  await verifyCaller(request);
 
   let drivers: DriverRecord[] = [];
   try {
@@ -121,6 +134,8 @@ export const loader = withApi(async ({ request }) => {
       assigned[0] ||
       null;
 
+    const hasLiveGps = typeof d.lat === 'number' && typeof d.lng === 'number' && Boolean(d.lastLocationUpdate);
+
     return {
       id: d.id,
       name: d.name || d.email || 'Chauffeur',
@@ -131,6 +146,9 @@ export const loader = withApi(async ({ request }) => {
       onDuty: d.onDuty !== false,
       lat: typeof d.lat === 'number' ? d.lat : null,
       lng: typeof d.lng === 'number' ? d.lng : null,
+      defaultLat: 40.8501, // Teterboro Fleet Base
+      defaultLng: -74.0608,
+      hasLiveGps,
       heading: typeof d.heading === 'number' ? d.heading : 0,
       speed: typeof d.speed === 'number' ? d.speed : 0,
       lastLocationUpdate: d.lastLocationUpdate || null,
@@ -161,7 +179,7 @@ export const loader = withApi(async ({ request }) => {
  * real-time GPS coordinates, speed, and heading.
  */
 export const action = withApi(async ({ request }) => {
-  const caller = await verifyCaller(request.headers.get('Authorization'));
+  const caller = await verifyCaller(request);
   const body = await readJsonBody<{
     lat?: number;
     lng?: number;

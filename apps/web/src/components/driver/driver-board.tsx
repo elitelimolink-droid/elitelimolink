@@ -151,7 +151,7 @@ export function DriverBoard({
   const [actionError, setActionError] = useState('');
 
   // GPS Broadcast & Drive View State
-  const [gpsStatus, setGpsStatus] = useState<'requesting' | 'active' | 'denied' | 'unsupported'>('requesting');
+  const [gpsStatus, setGpsStatus] = useState<'requesting' | 'active' | 'standby' | 'denied' | 'unsupported'>('requesting');
   const [lastCoords, setLastCoords] = useState<{ lat: number; lng: number; speed: number; heading: number } | null>(null);
   const [driveViewTripId, setDriveViewTripId] = useState<string | null>(null);
 
@@ -272,6 +272,37 @@ export function DriverBoard({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Failed to update trip status.');
       }
+
+      // If driver doesn't have active GPS lock, broadcast the pickup geocode immediately
+      if (!lastCoords && previous?.pickup) {
+        void (async () => {
+          try {
+            const gRes = await fetch(`/api/geocode?address=${encodeURIComponent(previous.pickup)}`);
+            if (gRes.ok) {
+              const gData = await gRes.json();
+              if (typeof gData.lat === 'number' && typeof gData.lng === 'number') {
+                setLastCoords({ lat: gData.lat, lng: gData.lng, speed: 0, heading: 0 });
+                setGpsStatus('active');
+                await fetch('/api/driver-location', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${pb.authStore.token}`,
+                  },
+                  body: JSON.stringify({
+                    lat: gData.lat,
+                    lng: gData.lng,
+                    heading: 0,
+                    speed: 0,
+                    tripId,
+                    onDuty: true,
+                  }),
+                });
+              }
+            }
+          } catch {}
+        })();
+      }
     } catch (err) {
       // Revert optimistic update
       if (previous) {
@@ -380,6 +411,71 @@ export function DriverBoard({
     });
   }, [trips]);
 
+  async function reportDriverGps(lat: number, lng: number, heading: number, speedMph: number) {
+    try {
+      await fetch('/api/driver-location', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${pb.authStore.token}`,
+        },
+        body: JSON.stringify({
+          lat,
+          lng,
+          heading,
+          speed: speedMph,
+          tripId: activeRide?.id,
+          onDuty: true,
+        }),
+      });
+    } catch {
+      // silent
+    }
+  }
+
+  async function broadcastCurrentOrPickup() {
+    setActionError('');
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setGpsStatus('unsupported');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const heading = pos.coords.heading || 0;
+        const speedMph = pos.coords.speed ? Math.round(pos.coords.speed * 2.23694) : 0;
+        setGpsStatus('active');
+        setLastCoords({ lat, lng, speed: speedMph, heading });
+        void reportDriverGps(lat, lng, heading, speedMph);
+      },
+      async () => {
+        // Fallback to active ride pickup address or fleet base
+        const targetAddr = activeRide?.pickup || sorted[0]?.pickup;
+        if (targetAddr) {
+          try {
+            const res = await fetch(`/api/geocode?address=${encodeURIComponent(targetAddr)}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (typeof data.lat === 'number' && typeof data.lng === 'number') {
+                setLastCoords({ lat: data.lat, lng: data.lng, speed: 0, heading: 0 });
+                setGpsStatus('active');
+                void reportDriverGps(data.lat, data.lng, 0, 0);
+                return;
+              }
+            }
+          } catch {}
+        }
+        // Base fallback: Teterboro Hub
+        setLastCoords({ lat: 40.8501, lng: -74.0608, speed: 0, heading: 0 });
+        setGpsStatus('standby');
+        void reportDriverGps(40.8501, -74.0608, 0, 0);
+      },
+      { enableHighAccuracy: false, timeout: 8000 }
+    );
+  }
+
   // Keep driver GPS broadcast streaming live to dispatch
   useEffect(() => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
@@ -390,73 +486,79 @@ export function DriverBoard({
     let isMounted = true;
     let lastReportTime = 0;
 
-    async function reportLocation(lat: number, lng: number, heading: number, speedMph: number) {
-      const now = Date.now();
-      if (now - lastReportTime < 7000) return;
-      lastReportTime = now;
+    function handlePosition(pos: GeolocationPosition) {
+      if (!isMounted) return;
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const heading = pos.coords.heading || 0;
+      const speedMph = pos.coords.speed ? Math.round(pos.coords.speed * 2.23694) : 0;
 
-      try {
-        await fetch('/api/driver-location', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${pb.authStore.token}`,
-          },
-          body: JSON.stringify({
-            lat,
-            lng,
-            heading,
-            speed: speedMph,
-            tripId: activeRide?.id,
-            onDuty: true,
-          }),
-        });
-      } catch {
-        // silent
+      setGpsStatus('active');
+      setLastCoords({ lat, lng, speed: speedMph, heading });
+
+      const now = Date.now();
+      if (now - lastReportTime >= 6000) {
+        lastReportTime = now;
+        void reportDriverGps(lat, lng, heading, speedMph);
       }
     }
 
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        if (!isMounted) return;
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const heading = pos.coords.heading || 0;
-        const speedMph = pos.coords.speed ? Math.round(pos.coords.speed * 2.23694) : 0;
+    function handleGpsError(err: GeolocationPositionError) {
+      if (!isMounted) return;
+      if (err.code === err.PERMISSION_DENIED) {
+        setGpsStatus('denied');
+        return;
+      }
 
-        setGpsStatus('active');
-        setLastCoords({ lat, lng, speed: speedMph, heading });
-        void reportLocation(lat, lng, heading, speedMph);
-      },
-      (err) => {
-        if (!isMounted) return;
-        if (err.code === err.PERMISSION_DENIED) {
-          setGpsStatus('denied');
-        } else {
-          setGpsStatus('active');
-        }
-      },
+      // If high accuracy failed with "Location unavailable" or TIMEOUT,
+      // fall back to standard/Wi-Fi/IP location
+      navigator.geolocation.getCurrentPosition(
+        handlePosition,
+        () => {
+          if (!isMounted) return;
+          setGpsStatus('standby');
+          // If active trip exists and no coords set yet, geocode pickup
+          if (activeRide?.pickup && !lastCoords) {
+            void (async () => {
+              try {
+                const res = await fetch(`/api/geocode?address=${encodeURIComponent(activeRide.pickup)}`);
+                if (res.ok) {
+                  const data = await res.json();
+                  if (typeof data.lat === 'number' && typeof data.lng === 'number' && isMounted) {
+                    setLastCoords({ lat: data.lat, lng: data.lng, speed: 0, heading: 0 });
+                    void reportDriverGps(data.lat, data.lng, 0, 0);
+                  }
+                }
+              } catch {}
+            })();
+          }
+        },
+        { enableHighAccuracy: false, timeout: 12000, maximumAge: 30000 }
+      );
+    }
+
+    // High accuracy watch
+    const watchId = navigator.geolocation.watchPosition(
+      handlePosition,
+      handleGpsError,
       {
         enableHighAccuracy: true,
         maximumAge: 10000,
-        timeout: 20000,
+        timeout: 10000,
       }
     );
 
+    // Periodic heartbeat every 12 seconds with low-accuracy fallback
     const intervalId = window.setInterval(() => {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          if (!isMounted) return;
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          const heading = pos.coords.heading || 0;
-          const speedMph = pos.coords.speed ? Math.round(pos.coords.speed * 2.23694) : 0;
-          setGpsStatus('active');
-          setLastCoords({ lat, lng, speed: speedMph, heading });
-          void reportLocation(lat, lng, heading, speedMph);
+        handlePosition,
+        () => {
+          navigator.geolocation.getCurrentPosition(handlePosition, () => {}, {
+            enableHighAccuracy: false,
+            timeout: 10000,
+          });
         },
-        () => {},
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: false, timeout: 10000 }
       );
     }, 12000);
 
@@ -465,7 +567,7 @@ export function DriverBoard({
       navigator.geolocation.clearWatch(watchId);
       window.clearInterval(intervalId);
     };
-  }, [activeRide?.id]);
+  }, [activeRide?.id, activeRide?.pickup]);
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -545,7 +647,13 @@ export function DriverBoard({
           >
             <Compass size={13} /> Driver View
           </button>
-          <span className={`driver-gps-pill ${gpsStatus === 'active' ? 'active' : gpsStatus === 'denied' ? 'denied' : ''}`}>
+          <button
+            type="button"
+            className={`driver-gps-pill ${gpsStatus === 'active' ? 'active' : gpsStatus === 'denied' ? 'denied' : ''}`}
+            onClick={() => void broadcastCurrentOrPickup()}
+            style={{ cursor: 'pointer', border: 0 }}
+            title="Click to refresh or broadcast location"
+          >
             <span
               className="driver-duty-dot"
               style={{
@@ -553,8 +661,14 @@ export function DriverBoard({
                   gpsStatus === 'active' ? '#22c55e' : gpsStatus === 'denied' ? '#ef4444' : '#eab308',
               }}
             />
-            {gpsStatus === 'active' ? 'GPS Live' : gpsStatus === 'denied' ? 'GPS Off' : 'GPS Connecting…'}
-          </span>
+            {gpsStatus === 'active'
+              ? 'GPS Live'
+              : gpsStatus === 'denied'
+              ? 'GPS Off (Tap to Set)'
+              : gpsStatus === 'standby'
+              ? 'Standby (Tap to Send)'
+              : 'GPS Connecting…'}
+          </button>
           <span className="driver-duty-badge">
             <span className="driver-duty-dot" /> On Duty
           </span>
@@ -1397,10 +1511,21 @@ export function DriverBoard({
                   <span className="driver-hud-tele-lbl">Compass Heading</span>
                 </div>
                 <div className="driver-hud-tele-card">
-                  <span className="driver-hud-tele-val" style={{ fontSize: 16, color: gpsStatus === 'active' ? '#4ade80' : '#f87171' }}>
-                    {gpsStatus === 'active' ? '🟢 Live Broadcasting' : gpsStatus === 'denied' ? '🔴 GPS Denied' : '🟡 Linking…'}
-                  </span>
-                  <span className="driver-hud-tele-lbl">Dispatch GPS Link</span>
+                  <button
+                    type="button"
+                    onClick={() => void broadcastCurrentOrPickup()}
+                    style={{ background: 'transparent', border: 0, padding: 0, textAlign: 'left', cursor: 'pointer', color: 'inherit' }}
+                    title="Tap to refresh or broadcast location"
+                  >
+                    <span className="driver-hud-tele-val" style={{ fontSize: 15, color: gpsStatus === 'active' ? '#4ade80' : '#fbbf24', display: 'block' }}>
+                      {gpsStatus === 'active'
+                        ? '🟢 Live GPS Stream'
+                        : gpsStatus === 'denied'
+                        ? '🔴 GPS Off (Tap to Set)'
+                        : '🟡 Standby (Tap to Send)'}
+                    </span>
+                    <span className="driver-hud-tele-lbl">Dispatch Link 📡</span>
+                  </button>
                 </div>
                 <div className="driver-hud-tele-card">
                   <span className="driver-hud-tele-val">{clock(t.pickupAt)}</span>

@@ -1372,6 +1372,14 @@ html.dark .activity-time { color: var(--ink-light); }
 .fleet-status-pill.active { background: #dbeafe; color: #1e40af; }
 .fleet-status-pill.idle { background: #f1f5f9; color: #475569; }
 .fleet-status-pill.offline { background: #fee2e2; color: #991b1b; }
+.fleet-status-pill.standby { background: #fef3c7; color: #92400e; }
+.fleet-dispatch-box { margin-top: 14px; padding: 12px; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; display: flex; flex-direction: column; gap: 8px; }
+.fleet-action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; border: 1px solid #dbeafe; background: #fff; color: #1e40af; cursor: pointer; transition: all .15s ease; }
+.fleet-action-btn:hover { background: #eff6ff; border-color: #93c5fd; transform: translateY(-1px); }
+.fleet-action-btn.place-pickup { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.fleet-action-btn.place-base { background: #f8fafc; color: #334155; border-color: #cbd5e1; }
+.fleet-action-btn.sim-start { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.fleet-action-btn.sim-stop { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
 .fleet-driver-trip-summary { background: #fff; border: 1px solid #dbeafe; border-radius: 8px; padding: 6px 10px; font-size: 11px; margin-top: 4px; }
 .fleet-map-wrapper { position: relative; flex: 1; height: 100%; min-height: 480px; }
 .fleet-leaflet-map { width: 100%; height: 100%; min-height: 480px; z-index: 1; }

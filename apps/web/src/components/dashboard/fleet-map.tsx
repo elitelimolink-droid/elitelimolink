@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useId } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import type { Map as LeafletMap, LayerGroup } from 'leaflet';
 import {
   CarFront,
@@ -11,11 +11,14 @@ import {
   MapPin,
   Navigation,
   Phone,
+  Play,
+  Square,
   RefreshCw,
   Search,
   Sparkles,
   User,
   Users,
+  Building,
   X,
 } from 'lucide-react';
 import pb from '@/lib/pocketbase-client';
@@ -33,6 +36,7 @@ export type DriverFleetItem = {
   heading: number;
   speed: number;
   lastLocationUpdate: string | null;
+  hasLiveGps?: boolean;
   activeTrip: {
     id: string;
     passengerName: string;
@@ -49,28 +53,18 @@ export type DriverFleetItem = {
   } | null;
 };
 
+// Base coordinates for Elite Limo Link / Teterboro Airport Fleet Hub
+const FLEET_BASE_LAT = 40.8501;
+const FLEET_BASE_LNG = -74.0608;
+
 function formatAgo(iso: string | null): string {
-  if (!iso) return 'No GPS signal';
+  if (!iso) return 'Standby (Awaiting GPS lock)';
   const diff = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
   if (diff < 15) return 'Live (Just now)';
   if (diff < 60) return `${diff}s ago`;
   const mins = Math.floor(diff / 60);
   if (mins < 60) return `${mins}m ago`;
   return `${Math.floor(mins / 60)}h ago`;
-}
-
-function calculateDistanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 3958.8; // Radius of Earth in miles
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return Math.round(R * c * 10) / 10;
 }
 
 export function FleetMap({
@@ -93,9 +87,36 @@ export function FleetMap({
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'active' | 'idle'>('all');
   const [lastRefreshed, setLastRefreshed] = useState<number>(Date.now());
+  const [actionInProgress, setActionInProgress] = useState(false);
 
-  // Geocoded cache for passenger addresses to draw route lines from driver to customer
+  // Simulation state
+  const [simulatingDriverId, setSimulatingDriverId] = useState<string | null>(null);
+  const simIntervalRef = useRef<number | null>(null);
+
+  // Geocoded cache for passenger addresses to draw route lines and place standby pins
   const geocodeCache = useRef<Record<string, { lat: number; lng: number }>>({});
+  const [resolvedAddrs, setResolvedAddrs] = useState<Record<string, { lat: number; lng: number }>>({});
+
+  // Helper to resolve coordinates for an address (using /api/geocode)
+  async function resolveAddressCoords(addr: string): Promise<{ lat: number; lng: number } | null> {
+    if (!addr) return null;
+    if (geocodeCache.current[addr]) return geocodeCache.current[addr];
+    try {
+      const res = await fetch(`/api/geocode?address=${encodeURIComponent(addr)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.lat === 'number' && typeof data.lng === 'number') {
+          const coords = { lat: data.lat, lng: data.lng };
+          geocodeCache.current[addr] = coords;
+          setResolvedAddrs((prev) => ({ ...prev, [addr]: coords }));
+          return coords;
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+    return null;
+  }
 
   async function loadFleet() {
     try {
@@ -112,6 +133,12 @@ export function FleetMap({
       setDrivers(list);
       setLastRefreshed(Date.now());
       setError('');
+
+      // Pre-resolve trip addresses in background
+      for (const d of list) {
+        if (d.activeTrip?.pickup) void resolveAddressCoords(d.activeTrip.pickup);
+        if (d.activeTrip?.dropoff) void resolveAddressCoords(d.activeTrip.dropoff);
+      }
     } catch (err) {
       setError('Could not update live driver locations.');
     } finally {
@@ -119,12 +146,12 @@ export function FleetMap({
     }
   }
 
-  // Periodic polling every 10 seconds
+  // Periodic polling every 8 seconds
   useEffect(() => {
     void loadFleet();
     const interval = window.setInterval(() => {
       void loadFleet();
-    }, 10000);
+    }, 8000);
     return () => window.clearInterval(interval);
   }, []);
 
@@ -141,9 +168,9 @@ export function FleetMap({
       if (cancelled || !containerRef.current) return;
 
       if (!mapRef.current) {
-        // Default center: NYC / Tri-State Metro area
+        // Center: NYC / NJ Metro area
         const map = L.map(containerRef.current, {
-          center: [40.758, -73.9855],
+          center: [FLEET_BASE_LAT, FLEET_BASE_LNG],
           zoom: 11,
           zoomControl: false,
           attributionControl: true,
@@ -168,23 +195,55 @@ export function FleetMap({
     };
   }, []);
 
-  // Helper to resolve coordinates for an address (using /api/geocode or fallback)
-  async function resolveAddressCoords(addr: string): Promise<{ lat: number; lng: number } | null> {
-    if (!addr) return null;
-    if (geocodeCache.current[addr]) return geocodeCache.current[addr];
-    try {
-      const res = await fetch(`/api/geocode?q=${encodeURIComponent(addr)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.ok && data.coords) {
-          geocodeCache.current[addr] = data.coords;
-          return data.coords;
-        }
+  // Clean up simulation when component unmounts
+  useEffect(() => {
+    return () => {
+      if (simIntervalRef.current) {
+        window.clearInterval(simIntervalRef.current);
+        simIntervalRef.current = null;
       }
-    } catch {
-      // non-fatal
+    };
+  }, []);
+
+  /**
+   * Calculates effective display coordinates for a driver.
+   * If real GPS coordinates exist, uses them.
+   * Otherwise uses active pickup geocode or Fleet Base with a slight offset.
+   */
+  function getDriverLocation(d: DriverFleetItem, index: number): {
+    lat: number;
+    lng: number;
+    isLive: boolean;
+    label: string;
+  } {
+    if (typeof d.lat === 'number' && typeof d.lng === 'number') {
+      return {
+        lat: d.lat,
+        lng: d.lng,
+        isLive: true,
+        label: `${d.speed} mph`,
+      };
     }
-    return null;
+
+    // Fallback: check if active trip pickup coordinates are known
+    if (d.activeTrip?.pickup && geocodeCache.current[d.activeTrip.pickup]) {
+      const p = geocodeCache.current[d.activeTrip.pickup];
+      return {
+        lat: p.lat,
+        lng: p.lng,
+        isLive: false,
+        label: 'Pickup Area (Standby)',
+      };
+    }
+
+    // Fallback: Fleet Base (Teterboro Hub) with offset per driver index
+    const offset = (index % 6) * 0.0025;
+    return {
+      lat: FLEET_BASE_LAT + offset,
+      lng: FLEET_BASE_LNG + offset,
+      isLive: false,
+      label: 'Teterboro Base (Standby)',
+    };
   }
 
   // Update Map Markers and Route Lines whenever drivers update
@@ -201,37 +260,29 @@ export function FleetMap({
 
     const bounds: [number, number][] = [];
 
-    // Filtered driver list
-    for (const d of drivers) {
-      if (typeof d.lat !== 'number' || typeof d.lng !== 'number') continue;
-      bounds.push([d.lat, d.lng]);
+    // Render EVERY driver on the map
+    drivers.forEach((d, index) => {
+      const loc = getDriverLocation(d, index);
+      bounds.push([loc.lat, loc.lng]);
 
       const isSelected = d.id === selectedDriverId;
       const hasActiveTrip = Boolean(d.activeTrip);
       const tripStatus = d.activeTrip?.driverStatus || 'idle';
 
       // Status color
-      let statusColor = '#64748b'; // grey idle
-      let statusText = 'Idle / Available';
-      if (tripStatus === 'accepted') {
-        statusColor = '#2563eb'; // blue en route to pickup
-        statusText = 'En Route to Pickup';
-      } else if (tripStatus === 'arrived') {
-        statusColor = '#0284c7'; // cyan arrived at pickup
-        statusText = 'Arrived at Pickup';
-      } else if (tripStatus === 'on_board') {
-        statusColor = '#7c3aed'; // purple passenger on board
-        statusText = 'Passenger On Board';
-      } else if (hasActiveTrip) {
-        statusColor = '#2563eb';
-        statusText = 'Assigned to Trip';
+      let statusColor = loc.isLive ? '#2563eb' : '#d97706'; // blue if live, amber if standby
+      if (loc.isLive) {
+        if (tripStatus === 'accepted') statusColor = '#2563eb';
+        else if (tripStatus === 'arrived') statusColor = '#0284c7';
+        else if (tripStatus === 'on_board') statusColor = '#7c3aed';
+        else if (!hasActiveTrip) statusColor = '#16a34a'; // idle live available
       }
 
-      // Custom vehicle pin
+      // Marker HTML
       const markerHtml = `
         <div class="driver-map-pin ${isSelected ? 'selected' : ''}" style="--pin-color: ${statusColor};">
-          <div class="driver-pin-pulse"></div>
-          <div class="driver-pin-body">
+          <div class="driver-pin-pulse" style="${loc.isLive ? '' : 'animation-duration: 3s; opacity: 0.2;'}"></div>
+          <div class="driver-pin-body" style="${loc.isLive ? '' : 'border: 2px dashed #fff;'}">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.5 2.8C2.1 11 2 11.5 2 12v4c0 .6.4 1 1 1h2"/>
               <circle cx="7" cy="17" r="2"/>
@@ -239,7 +290,9 @@ export function FleetMap({
               <circle cx="17" cy="17" r="2"/>
             </svg>
           </div>
-          <div class="driver-pin-label">${d.name.split(' ')[0]}</div>
+          <div class="driver-pin-label">
+            ${d.name.split(' ')[0]}${loc.isLive ? '' : ' (Standby)'}
+          </div>
         </div>
       `;
 
@@ -250,23 +303,22 @@ export function FleetMap({
         iconAnchor: [21, 21],
       });
 
-      const marker = L.marker([d.lat, d.lng], { icon: customIcon });
+      const marker = L.marker([loc.lat, loc.lng], { icon: customIcon });
 
       // Click on driver marker
       marker.on('click', () => {
         setSelectedDriverId(d.id);
-        map.setView([d.lat!, d.lng!], Math.max(map.getZoom(), 13), { animate: true });
+        map.setView([loc.lat, loc.lng], Math.max(map.getZoom(), 13), { animate: true });
       });
 
       markersLayer.addLayer(marker);
 
-      // If this driver is selected and has an active trip with pickup address:
-      // Draw the route line to customer!
+      // If selected and has active trip with pickup address, draw route
       if (isSelected && d.activeTrip?.pickup) {
         void (async () => {
           const pickupCoords = await resolveAddressCoords(d.activeTrip!.pickup);
           if (pickupCoords && mapRef.current) {
-            const pBounds: [number, number][] = [[d.lat!, d.lng!], [pickupCoords.lat, pickupCoords.lng]];
+            const pBounds: [number, number][] = [[loc.lat, loc.lng], [pickupCoords.lat, pickupCoords.lng]];
 
             // Pickup pin (Marker A)
             const pickupIcon = L.divIcon({
@@ -280,10 +332,10 @@ export function FleetMap({
             );
             routeLayer.addLayer(pMarker);
 
-            // Connect driver to pickup with a styled dashed line
+            // Connect driver to pickup
             const connector = L.polyline(
               [
-                [d.lat!, d.lng!],
+                [loc.lat, loc.lng],
                 [pickupCoords.lat, pickupCoords.lng],
               ],
               {
@@ -326,27 +378,193 @@ export function FleetMap({
               }
             }
 
-            // Fit map to show both driver and customer pickup
+            // Show both driver and route
             map.fitBounds(L.latLngBounds(pBounds), { padding: [50, 50], maxZoom: 15 });
           }
         })();
       }
-    }
+    });
 
-    // Auto-fit to all drivers if no specific driver is selected
+    // Auto-fit to all drivers if no driver selected
     if (!selectedDriverId && bounds.length > 0) {
       map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 14 });
     }
-  }, [drivers, selectedDriverId]);
+  }, [drivers, selectedDriverId, resolvedAddrs]);
 
-  const selectedDriver = drivers.find((d) => d.id === selectedDriverId) || null;
+  const selectedDriver = useMemo(
+    () => drivers.find((d) => d.id === selectedDriverId) || null,
+    [drivers, selectedDriverId]
+  );
+
+  /**
+   * Dispatcher Action: Place driver at assigned pickup address
+   */
+  async function handlePlaceAtPickup(driver: DriverFleetItem) {
+    if (!driver.activeTrip?.pickup || actionInProgress) return;
+    setActionInProgress(true);
+    try {
+      const coords = await resolveAddressCoords(driver.activeTrip.pickup);
+      if (!coords) throw new Error('Could not resolve pickup address coordinates.');
+
+      await fetch('/api/driver-location', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${pb.authStore.token}`,
+        },
+        body: JSON.stringify({
+          driverId: driver.id,
+          lat: coords.lat,
+          lng: coords.lng,
+          speed: 0,
+          heading: 0,
+          tripId: driver.activeTrip.id,
+          onDuty: true,
+        }),
+      });
+
+      await loadFleet();
+      if (mapRef.current) {
+        mapRef.current.setView([coords.lat, coords.lng], 14, { animate: true });
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not place driver at pickup.');
+    } finally {
+      setActionInProgress(false);
+    }
+  }
+
+  /**
+   * Dispatcher Action: Place driver at Fleet Base (Teterboro)
+   */
+  async function handlePlaceAtBase(driver: DriverFleetItem) {
+    if (actionInProgress) return;
+    setActionInProgress(true);
+    try {
+      await fetch('/api/driver-location', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${pb.authStore.token}`,
+        },
+        body: JSON.stringify({
+          driverId: driver.id,
+          lat: FLEET_BASE_LAT,
+          lng: FLEET_BASE_LNG,
+          speed: 0,
+          heading: 90,
+          onDuty: true,
+        }),
+      });
+
+      await loadFleet();
+      if (mapRef.current) {
+        mapRef.current.setView([FLEET_BASE_LAT, FLEET_BASE_LNG], 14, { animate: true });
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not place driver at base.');
+    } finally {
+      setActionInProgress(false);
+    }
+  }
+
+  /**
+   * Dispatcher Action: Start or stop Live Drive Simulation
+   */
+  async function toggleSimulation(driver: DriverFleetItem) {
+    if (simulatingDriverId === driver.id) {
+      if (simIntervalRef.current) {
+        window.clearInterval(simIntervalRef.current);
+        simIntervalRef.current = null;
+      }
+      setSimulatingDriverId(null);
+      return;
+    }
+
+    if (simIntervalRef.current) {
+      window.clearInterval(simIntervalRef.current);
+      simIntervalRef.current = null;
+    }
+
+    setSimulatingDriverId(driver.id);
+
+    // Target destination (pickup if available, else standard NYC route)
+    let target = { lat: 40.758, lng: -73.9855 }; // Manhattan
+    if (driver.activeTrip?.pickup) {
+      const p = await resolveAddressCoords(driver.activeTrip.pickup);
+      if (p) target = p;
+    }
+
+    let curLat = driver.lat ?? FLEET_BASE_LAT;
+    let curLng = driver.lng ?? FLEET_BASE_LNG;
+
+    simIntervalRef.current = window.setInterval(async () => {
+      const dLat = target.lat - curLat;
+      const dLng = target.lng - curLng;
+      const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+
+      if (dist < 0.003) {
+        // Reached destination
+        if (simIntervalRef.current) {
+          window.clearInterval(simIntervalRef.current);
+          simIntervalRef.current = null;
+        }
+        setSimulatingDriverId(null);
+        return;
+      }
+
+      // Step towards destination
+      const nextLat = curLat + dLat * 0.12;
+      const nextLng = curLng + dLng * 0.12;
+      curLat = nextLat;
+      curLng = nextLng;
+
+      const heading = Math.round((Math.atan2(dLng, dLat) * 180) / Math.PI + 360) % 360;
+      const speed = 36;
+
+      try {
+        await fetch('/api/driver-location', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${pb.authStore.token}`,
+          },
+          body: JSON.stringify({
+            driverId: driver.id,
+            lat: nextLat,
+            lng: nextLng,
+            heading,
+            speed,
+            tripId: driver.activeTrip?.id,
+            onDuty: true,
+          }),
+        });
+
+        // Smooth local update
+        setDrivers((prev) =>
+          prev.map((d) =>
+            d.id === driver.id
+              ? {
+                  ...d,
+                  lat: nextLat,
+                  lng: nextLng,
+                  heading,
+                  speed,
+                  lastLocationUpdate: new Date().toISOString(),
+                }
+              : d
+          )
+        );
+      } catch {}
+    }, 3200);
+  }
 
   // Filtered list for sidebar
   const visibleDrivers = drivers.filter((d) => {
     if (filter === 'active' && !d.activeTrip) return false;
     if (filter === 'idle' && d.activeTrip) return false;
     if (search.trim()) {
-      const q = search.trim().toLowerCase();
+      const q = search.toLowerCase();
       return (
         d.name.toLowerCase().includes(q) ||
         (d.vehicle || '').toLowerCase().includes(q) ||
@@ -357,6 +575,8 @@ export function FleetMap({
     return true;
   });
 
+  const liveGpsCount = drivers.filter((d) => typeof d.lat === 'number' && typeof d.lng === 'number').length;
+
   return (
     <div className="fleet-view-container">
       {/* Header bar */}
@@ -365,7 +585,7 @@ export function FleetMap({
           <div className="fleet-live-pulse" />
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Live Driver Drive View</h2>
           <span className="driver-brand-tag" style={{ background: '#e0f2fe', color: '#0369a1', borderColor: '#bae6fd' }}>
-            {drivers.filter((d) => d.lat !== null).length} of {drivers.length} GPS Active
+            {liveGpsCount} Live GPS • {drivers.length - liveGpsCount} Standby ({drivers.length} Visible)
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -408,7 +628,7 @@ export function FleetMap({
               style={{ flex: 1, justifyContent: 'center' }}
               onClick={() => setFilter('idle')}
             >
-              Idle
+              Available
             </button>
           </div>
 
@@ -430,9 +650,9 @@ export function FleetMap({
                 No drivers found.
               </p>
             ) : (
-              visibleDrivers.map((d) => {
+              visibleDrivers.map((d, idx) => {
                 const isSelected = d.id === selectedDriverId;
-                const hasGps = typeof d.lat === 'number' && typeof d.lng === 'number';
+                const loc = getDriverLocation(d, idx);
                 const trip = d.activeTrip;
 
                 return (
@@ -442,22 +662,22 @@ export function FleetMap({
                     className={`fleet-driver-card${isSelected ? ' selected' : ''}`}
                     onClick={() => {
                       setSelectedDriverId(d.id);
-                      if (hasGps && mapRef.current) {
-                        mapRef.current.setView([d.lat!, d.lng!], 14, { animate: true });
+                      if (mapRef.current) {
+                        mapRef.current.setView([loc.lat, loc.lng], 14, { animate: true });
                       }
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <strong style={{ fontSize: 14, color: 'var(--ink)' }}>{d.name}</strong>
-                      <span className={`fleet-status-pill ${trip ? 'active' : hasGps ? 'idle' : 'offline'}`}>
-                        {trip ? trip.driverStatus.replace('_', ' ').toUpperCase() : hasGps ? 'IDLE' : 'NO GPS'}
+                      <span className={`fleet-status-pill ${trip ? 'active' : loc.isLive ? 'idle' : 'standby'}`}>
+                        {trip ? trip.driverStatus.replace('_', ' ').toUpperCase() : loc.isLive ? 'LIVE GPS' : 'STANDBY'}
                       </span>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--ink-mid)' }}>
                       <span><CarFront size={13} style={{ display: 'inline', marginRight: 3 }} /> {d.vehicle}</span>
                       <span>•</span>
-                      <span>{formatAgo(d.lastLocationUpdate)}</span>
+                      <span>{loc.isLive ? `${d.speed} mph` : 'Awaiting Phone GPS'}</span>
                     </div>
 
                     {trip && (
@@ -535,18 +755,53 @@ export function FleetMap({
                     )}
                   </div>
 
-                  {selectedDriver.lat !== null && selectedDriver.lng !== null && (
-                    <div style={{ marginTop: 8, fontSize: 11, color: '#15803d', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <Navigation size={13} />
-                      En route status: Chauffeur GPS tracked live on map
-                    </div>
-                  )}
+                  <div style={{ marginTop: 8, fontSize: 11, color: '#15803d', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Navigation size={13} />
+                    {typeof selectedDriver.lat === 'number'
+                      ? 'Live GPS Tracked: Chauffeur broadcast streaming'
+                      : 'Standby on Map: Awaiting phone GPS broadcast'}
+                  </div>
                 </div>
               ) : (
                 <div style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-mid)' }}>
-                  No active reservation in progress. Driver is on duty and available for assignments.
+                  Driver is on duty and available for assignments.
                 </div>
               )}
+
+              {/* Dispatcher Location Controls */}
+              <div className="fleet-dispatch-box" style={{ marginTop: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--ink-mid)' }}>
+                  Dispatcher Position &amp; Test Controls:
+                </span>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                  {selectedDriver.activeTrip?.pickup && (
+                    <button
+                      type="button"
+                      className="fleet-action-btn place-pickup"
+                      onClick={() => void handlePlaceAtPickup(selectedDriver)}
+                      disabled={actionInProgress}
+                    >
+                      <MapPin size={13} /> Place at Pickup Address
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="fleet-action-btn place-base"
+                    onClick={() => void handlePlaceAtBase(selectedDriver)}
+                    disabled={actionInProgress}
+                  >
+                    <Building size={13} /> Place at Teterboro Base
+                  </button>
+                  <button
+                    type="button"
+                    className={`fleet-action-btn ${simulatingDriverId === selectedDriver.id ? 'sim-stop' : 'sim-start'}`}
+                    onClick={() => void toggleSimulation(selectedDriver)}
+                  >
+                    {simulatingDriverId === selectedDriver.id ? <Square size={13} /> : <Play size={13} />}
+                    {simulatingDriverId === selectedDriver.id ? 'Stop Simulation' : 'Simulate Live Drive (36 mph)'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
