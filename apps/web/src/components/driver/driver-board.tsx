@@ -101,10 +101,18 @@ function appleMapsUrl(addr: string) {
   return `https://maps.apple.com/?daddr=${encodeURIComponent(addr)}`;
 }
 
+function smsBodyUrl(phone: string, bodyText: string) {
+  const clean = (phone || '').replace(/[^\d+]/g, '');
+  if (!clean) return '#';
+  const isIos = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/i.test(navigator.userAgent);
+  const sep = isIos ? '&' : '?';
+  return `sms:${clean}${sep}body=${encodeURIComponent(bodyText)}`;
+}
+
 /**
  * Maps the reservation record into a 0-4 lifecycle step:
- * 0: Assigned (waiting for driver to accept)
- * 1: Accepted (driver accepted the ride)
+ * 0: Assigned (waiting for driver to start / on the way)
+ * 1: On the Way / Accepted (driver is on the way to pickup)
  * 2: Arrived (driver arrived at pickup)
  * 3: On Board (passenger picked up, ride in progress)
  * 4: Completed (passenger dropped off, trip finished)
@@ -114,7 +122,7 @@ function getTripStage(t: AssignedTrip): number {
   if (st === 'completed' || t.driverStatus === 'dropped_off') return 4;
   if (t.driverStatus === 'on_board') return 3;
   if (t.driverStatus === 'arrived') return 2;
-  if (t.driverStatus === 'accepted') return 1;
+  if (t.driverStatus === 'accepted' || t.driverStatus === 'on_the_way') return 1;
   return 0;
 }
 
@@ -139,6 +147,28 @@ export function DriverBoard({
   // Trip action progression state
   const [actingTripId, setActingTripId] = useState('');
   const [actionError, setActionError] = useState('');
+
+  // Automated SMS Notification State & History
+  const [smsBanner, setSmsBanner] = useState<{
+    tripId: string;
+    customerName: string;
+    phone: string;
+    message: string;
+    status: 'on_the_way' | 'arrived';
+    sentAt: string;
+  } | null>(null);
+
+  const [smsSentLog, setSmsSentLog] = useState<
+    Record<string, { on_the_way?: string; arrived?: string }>
+  >(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('ell_driver_sms_log');
+        if (raw) return JSON.parse(raw);
+      } catch {}
+    }
+    return {};
+  });
 
   // GPS Broadcast, WakeLock & Drive View State
   const [gpsStatus, setGpsStatus] = useState<'requesting' | 'active' | 'standby' | 'denied' | 'unsupported'>('requesting');
@@ -249,20 +279,48 @@ export function DriverBoard({
   }, []);
 
   /**
-   * Action handler: Accept, Arrive, Pick Up, Drop Off
+   * Action handler: On the Way (Accept), Arrive, Pick Up, Drop Off
+   * Automatically dispatches customer SMS notifications:
+   * - On the Way -> "Your driver is on the way."
+   * - Arrived -> "Your driver has arrived."
    */
-  async function handleTripAction(tripId: string, action: 'accept' | 'arrive' | 'pickup' | 'dropoff') {
+  async function handleTripAction(
+    tripId: string,
+    action: 'accept' | 'on_the_way' | 'arrive' | 'pickup' | 'dropoff'
+  ) {
     if (actingTripId) return;
     setActingTripId(tripId);
     setActionError('');
 
-    // Optimistic local update
     const previous = trips.find((t) => t.id === tripId);
+    const customerName = previous?.name || 'Customer';
+    const customerPhone = previous?.phone || '';
+    const sentStamp = new Date().toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
+    // Determine automated SMS message for on_the_way and arrived statuses
+    const autoSmsInfo: {
+      statusKey: 'on_the_way' | 'arrived';
+      message: string;
+    } | null =
+      action === 'accept' || action === 'on_the_way'
+        ? { statusKey: 'on_the_way', message: 'Your driver is on the way.' }
+        : action === 'arrive'
+        ? { statusKey: 'arrived', message: 'Your driver has arrived.' }
+        : null;
+
+    // Optimistic local update
     setTrips((prev) =>
       prev.map((t) => {
         if (t.id !== tripId) return t;
-        if (action === 'accept') {
-          return { ...t, driverStatus: 'accepted', status: t.status === 'pending' ? 'confirmed' : t.status };
+        if (action === 'accept' || action === 'on_the_way') {
+          return {
+            ...t,
+            driverStatus: 'on_the_way',
+            status: t.status === 'pending' ? 'confirmed' : t.status,
+          };
         }
         if (action === 'arrive') {
           return { ...t, driverStatus: 'arrived' };
@@ -276,6 +334,33 @@ export function DriverBoard({
         return t;
       })
     );
+
+    if (autoSmsInfo) {
+      setSmsSentLog((prev) => {
+        const next = {
+          ...prev,
+          [tripId]: {
+            ...(prev[tripId] || {}),
+            [autoSmsInfo.statusKey]: sentStamp,
+          },
+        };
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('ell_driver_sms_log', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
+
+      setSmsBanner({
+        tripId,
+        customerName,
+        phone: customerPhone,
+        message: autoSmsInfo.message,
+        status: autoSmsInfo.statusKey,
+        sentAt: sentStamp,
+      });
+    }
 
     try {
       const res = await fetch('/api/driver-trip', {
@@ -958,6 +1043,71 @@ export function DriverBoard({
           </p>
         )}
 
+        {/* Automated Customer SMS Dispatched Notification Banner */}
+        {smsBanner && (
+          <div
+            role="status"
+            style={{
+              marginBottom: 16,
+              padding: '14px 16px',
+              background: smsBanner.status === 'arrived' ? '#f0fdf4' : '#eff6ff',
+              border: `1.5px solid ${smsBanner.status === 'arrived' ? '#22c55e' : '#3b82f6'}`,
+              borderRadius: 14,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+              boxShadow: '0 4px 14px rgba(15, 23, 42, 0.06)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  background: smsBanner.status === 'arrived' ? '#16a34a' : '#2563eb',
+                  color: '#fff',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <MessageSquare size={17} />
+              </span>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: smsBanner.status === 'arrived' ? '#15803d' : '#1d4ed8', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                  ✓ Automated SMS Sent to {smsBanner.customerName}{smsBanner.phone ? ` (${smsBanner.phone})` : ''} • {smsBanner.sentAt}
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>
+                  “{smsBanner.message}”
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {smsBanner.phone && (
+                <a
+                  href={smsBodyUrl(smsBanner.phone, smsBanner.message)}
+                  className="driver-tool-btn"
+                  style={{ background: '#0f172a', color: '#fff', border: 0, fontWeight: 700, padding: '6px 12px', fontSize: 12 }}
+                >
+                  <MessageSquare size={13} /> Open in Phone SMS
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setSmsBanner(null)}
+                style={{ border: 0, background: 'transparent', cursor: 'pointer', color: '#64748b', padding: 4 }}
+                aria-label="Dismiss SMS notification"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Tab 1, 2, 3: Trips List */}
         {activeTab !== 'settings' ? (
           <div>
@@ -983,6 +1133,9 @@ export function DriverBoard({
                   const isNoteBusy = savingNoteId === t.id;
                   const isNoteSaved = savedNoteId === t.id;
                   const currentDraft = notesDraft[t.id] ?? t.driverNotes ?? '';
+                  const tripSms = smsSentLog[t.id] || {};
+                  const onTheWaySent = stage >= 1 || Boolean(tripSms.on_the_way);
+                  const arrivedSent = stage >= 2 || Boolean(tripSms.arrived);
 
                   return (
                     <article
@@ -1119,28 +1272,54 @@ export function DriverBoard({
 
                       {/* 4-Step Interactive Chauffeur Workflow Pipeline */}
                       <div className="driver-pipeline-container">
-                        <div className={`driver-pipe-step${stage >= 1 ? ' done' : stage === 0 ? ' current' : ''}`}>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => handleTripAction(t.id, 'on_the_way')}
+                          className={`driver-pipe-step${stage >= 1 ? ' done' : stage === 0 ? ' current' : ''}`}
+                          style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 0 }}
+                          title='Set status to On the Way & send "Your driver is on the way."'
+                        >
                           <span className="driver-pipe-num">{stage >= 1 ? '✓' : '1'}</span>
-                          <span>Accept Ride</span>
-                        </div>
+                          <span>On the Way</span>
+                        </button>
                         <div className={`driver-pipe-divider${stage >= 1 ? ' done' : ''}`} />
 
-                        <div className={`driver-pipe-step${stage >= 2 ? ' done' : stage === 1 ? ' current' : ''}`}>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => handleTripAction(t.id, 'arrive')}
+                          className={`driver-pipe-step${stage >= 2 ? ' done' : stage === 1 ? ' current' : ''}`}
+                          style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 0 }}
+                          title='Set status to Arrived & send "Your driver has arrived."'
+                        >
                           <span className="driver-pipe-num">{stage >= 2 ? '✓' : '2'}</span>
                           <span>Arrived</span>
-                        </div>
+                        </button>
                         <div className={`driver-pipe-divider${stage >= 2 ? ' done' : ''}`} />
 
-                        <div className={`driver-pipe-step${stage >= 3 ? ' done' : stage === 2 ? ' current' : ''}`}>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => handleTripAction(t.id, 'pickup')}
+                          className={`driver-pipe-step${stage >= 3 ? ' done' : stage === 2 ? ' current' : ''}`}
+                          style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 0 }}
+                        >
                           <span className="driver-pipe-num">{stage >= 3 ? '✓' : '3'}</span>
                           <span>On Board</span>
-                        </div>
+                        </button>
                         <div className={`driver-pipe-divider${stage >= 3 ? ' done' : ''}`} />
 
-                        <div className={`driver-pipe-step${stage === 4 ? ' done' : stage === 3 ? ' current' : ''}`}>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => handleTripAction(t.id, 'dropoff')}
+                          className={`driver-pipe-step${stage === 4 ? ' done' : stage === 3 ? ' current' : ''}`}
+                          style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 0 }}
+                        >
                           <span className="driver-pipe-num">{stage === 4 ? '✓' : '4'}</span>
                           <span>Drop Off</span>
-                        </div>
+                        </button>
                       </div>
 
                       {/* Driver Action Control Buttons */}
@@ -1150,10 +1329,10 @@ export function DriverBoard({
                             type="button"
                             className="driver-primary-btn btn-accept"
                             disabled={isBusy}
-                            onClick={() => handleTripAction(t.id, 'accept')}
+                            onClick={() => handleTripAction(t.id, 'on_the_way')}
                           >
-                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={2.5} />}
-                            Accept Ride
+                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Navigation size={16} strokeWidth={2.5} />}
+                            On the Way — Notify Customer (“Your driver is on the way.”)
                           </button>
                         )}
 
@@ -1165,7 +1344,7 @@ export function DriverBoard({
                             onClick={() => handleTripAction(t.id, 'arrive')}
                           >
                             {isBusy ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} strokeWidth={2.5} />}
-                            I’ve Arrived at Pickup
+                            Arrived — Notify Customer (“Your driver has arrived.”)
                           </button>
                         )}
 
@@ -1198,6 +1377,114 @@ export function DriverBoard({
                             <CheckCircle2 size={18} /> Ride Completed
                           </div>
                         )}
+                      </div>
+
+                      {/* Automated Customer SMS Notifications Status Box */}
+                      <div
+                        style={{
+                          padding: '12px 14px',
+                          background: '#f8fafc',
+                          borderRadius: 12,
+                          border: '1px solid #e2e8f0',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: '#334155', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <MessageSquare size={13} color="#2563eb" /> Automated Customer SMS Notifications
+                          </span>
+                          {t.phone && (
+                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
+                              Recipient: {t.phone}
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
+                          {/* Automated SMS 1: On the way */}
+                          <div
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: 10,
+                              background: onTheWaySent ? '#eff6ff' : '#ffffff',
+                              border: `1px solid ${onTheWaySent ? '#bfdbfe' : '#e2e8f0'}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 8,
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: onTheWaySent ? '#1d4ed8' : '#64748b' }}>
+                                Status: On the Way {tripSms.on_the_way ? `(${tripSms.on_the_way})` : ''}
+                              </div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                                “Your driver is on the way.”
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleTripAction(t.id, 'on_the_way')}
+                              style={{
+                                border: 0,
+                                borderRadius: 8,
+                                padding: '6px 10px',
+                                fontSize: 11,
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                background: onTheWaySent ? '#dbeafe' : '#2563eb',
+                                color: onTheWaySent ? '#1e40af' : '#ffffff',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {onTheWaySent ? '✓ Sent · Resend' : 'Set On the Way'}
+                            </button>
+                          </div>
+
+                          {/* Automated SMS 2: Arrived */}
+                          <div
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: 10,
+                              background: arrivedSent ? '#f0fdf4' : '#ffffff',
+                              border: `1px solid ${arrivedSent ? '#bbf7d0' : '#e2e8f0'}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 8,
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: arrivedSent ? '#15803d' : '#64748b' }}>
+                                Status: Arrived {tripSms.arrived ? `(${tripSms.arrived})` : ''}
+                              </div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                                “Your driver has arrived.”
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleTripAction(t.id, 'arrive')}
+                              style={{
+                                border: 0,
+                                borderRadius: 8,
+                                padding: '6px 10px',
+                                fontSize: 11,
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                background: arrivedSent ? '#dcfce7' : '#16a34a',
+                                color: arrivedSent ? '#166534' : '#ffffff',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {arrivedSent ? '✓ Sent · Resend' : 'Set Arrived'}
+                            </button>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Dedicated Driver Trip Notes Area (Şoför Notu Bölümü) */}
@@ -1747,6 +2034,55 @@ export function DriverBoard({
             </header>
 
             <div className="driver-driveview-hud">
+              {/* Live Automated SMS Notification Toast inside HUD */}
+              {smsBanner && smsBanner.tripId === t.id && (
+                <div
+                  role="status"
+                  style={{
+                    padding: '12px 14px',
+                    background: smsBanner.status === 'arrived' ? 'rgba(22, 163, 74, 0.2)' : 'rgba(37, 99, 235, 0.22)',
+                    border: `1.5px solid ${smsBanner.status === 'arrived' ? '#22c55e' : '#3b82f6'}`,
+                    borderRadius: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <MessageSquare size={18} color={smsBanner.status === 'arrived' ? '#4ade80' : '#60a5fa'} />
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: smsBanner.status === 'arrived' ? '#4ade80' : '#93c5fd', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                        ✓ Automated SMS Dispatched to {smsBanner.customerName}{smsBanner.phone ? ` (${smsBanner.phone})` : ''} • {smsBanner.sentAt}
+                      </div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', marginTop: 2 }}>
+                        “{smsBanner.message}”
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {smsBanner.phone && (
+                      <a
+                        href={smsBodyUrl(smsBanner.phone, smsBanner.message)}
+                        className="driver-tool-btn"
+                        style={{ background: '#0284c7', color: '#fff', border: 0, fontWeight: 800, padding: '6px 10px', fontSize: 11 }}
+                      >
+                        <MessageSquare size={12} /> Send via Phone SMS
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setSmsBanner(null)}
+                      style={{ border: 0, background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: 4 }}
+                      aria-label="Dismiss SMS banner"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Destination & Instant Turn-by-Turn GPS Navigation Card */}
               <div className="driver-hud-destination">
                 <div className="driver-hud-dest-label">
@@ -1799,6 +2135,97 @@ export function DriverBoard({
                 )}
               </div>
 
+              {/* Driver Status & Automated SMS Quick Control Strip */}
+              {(() => {
+                const tripSms = smsSentLog[t.id] || {};
+                const onTheWaySent = stage >= 1 || Boolean(tripSms.on_the_way);
+                const arrivedSent = stage >= 2 || Boolean(tripSms.arrived);
+                return (
+                  <div
+                    style={{
+                      background: '#131d2e',
+                      border: '1px solid #1e293b',
+                      borderRadius: 12,
+                      padding: '10px 12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: '#38bdf8', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <MessageSquare size={13} /> Status &amp; Automated Customer SMS
+                      </span>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                        {t.name || 'Customer'}{t.phone ? ` • ${t.phone}` : ''}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleTripAction(t.id, 'on_the_way')}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          border: stage === 1 ? '2px solid #38bdf8' : '1px solid #334155',
+                          background: onTheWaySent ? 'rgba(37, 99, 235, 0.28)' : '#1e293b',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 3,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: '#60a5fa' }}>
+                            🚗 Status: On the Way
+                          </span>
+                          <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 6, background: onTheWaySent ? '#2563eb' : '#334155', color: '#fff' }}>
+                            {onTheWaySent ? '✓ SMS SENT' : 'AUTO-SMS'}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>
+                          “Your driver is on the way.”
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleTripAction(t.id, 'arrive')}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          border: stage === 2 ? '2px solid #4ade80' : '1px solid #334155',
+                          background: arrivedSent ? 'rgba(22, 163, 74, 0.28)' : '#1e293b',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 3,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: '#4ade80' }}>
+                            📍 Status: Arrived
+                          </span>
+                          <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 6, background: arrivedSent ? '#16a34a' : '#334155', color: '#fff' }}>
+                            {arrivedSent ? '✓ SMS SENT' : 'AUTO-SMS'}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>
+                          “Your driver has arrived.”
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Giant Mission Step Progression Button - Directly Below Destination */}
               <div>
                 {stage === 0 && (
@@ -1806,10 +2233,10 @@ export function DriverBoard({
                     type="button"
                     className="driver-hud-big-action accept"
                     disabled={isBusy}
-                    onClick={() => handleTripAction(t.id, 'accept')}
+                    onClick={() => handleTripAction(t.id, 'on_the_way')}
                   >
-                    {isBusy ? <Loader2 size={20} className="animate-spin" /> : <Check size={20} strokeWidth={3} />}
-                    ACCEPT RIDE &amp; START ROUTE
+                    {isBusy ? <Loader2 size={20} className="animate-spin" /> : <Navigation size={20} strokeWidth={3} />}
+                    ON THE WAY — SEND “YOUR DRIVER IS ON THE WAY.”
                   </button>
                 )}
 
@@ -1821,7 +2248,7 @@ export function DriverBoard({
                     onClick={() => handleTripAction(t.id, 'arrive')}
                   >
                     {isBusy ? <Loader2 size={20} className="animate-spin" /> : <MapPin size={20} strokeWidth={3} />}
-                    I’VE ARRIVED AT PICKUP LOCATION
+                    I’VE ARRIVED — SEND “YOUR DRIVER HAS ARRIVED.”
                   </button>
                 )}
 

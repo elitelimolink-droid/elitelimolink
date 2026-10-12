@@ -272,7 +272,7 @@ export function FleetMap({
       // Status color
       let statusColor = loc.isLive ? '#2563eb' : '#d97706'; // blue if live, amber if standby
       if (loc.isLive) {
-        if (tripStatus === 'accepted') statusColor = '#2563eb';
+        if (tripStatus === 'accepted' || tripStatus === 'on_the_way') statusColor = '#2563eb';
         else if (tripStatus === 'arrived') statusColor = '#0284c7';
         else if (tripStatus === 'on_board') statusColor = '#7c3aed';
         else if (!hasActiveTrip) statusColor = '#16a34a'; // idle live available
@@ -670,7 +670,7 @@ export function FleetMap({
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <strong style={{ fontSize: 14, color: 'var(--ink)' }}>{d.name}</strong>
                       <span className={`fleet-status-pill ${trip ? 'active' : loc.isLive ? 'idle' : 'standby'}`}>
-                        {trip ? trip.driverStatus.replace('_', ' ').toUpperCase() : loc.isLive ? 'LIVE GPS' : 'STANDBY'}
+                        {trip ? trip.driverStatus.replace(/_/g, ' ').toUpperCase() : loc.isLive ? 'LIVE GPS' : 'STANDBY'}
                       </span>
                     </div>
 
@@ -741,7 +741,7 @@ export function FleetMap({
                 <div style={{ marginTop: 12, padding: 12, background: '#f8fbff', borderRadius: 10, border: '1px solid #dbeafe' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 12, fontWeight: 800, color: '#1e40af' }}>
-                      CURRENT MISSION: {selectedDriver.activeTrip.driverStatus.toUpperCase()}
+                      CURRENT MISSION: {selectedDriver.activeTrip.driverStatus.replace(/_/g, ' ').toUpperCase()}
                     </span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-light)' }}>
                       Guest: {selectedDriver.activeTrip.passengerName}

@@ -5,6 +5,8 @@ import { pocketbaseAdmin } from '@/lib/pocketbase-client.server';
 type ReservationRecord = {
   id: string;
   name?: string;
+  email?: string;
+  phone?: string;
   status?: string;
   driver?: string;
   driverStatus?: string;
@@ -13,6 +15,7 @@ type ReservationRecord = {
   owner?: string;
   pickup?: string;
   dropoff?: string;
+  sourceName?: string;
 };
 
 type CallerInfo = {
@@ -33,6 +36,111 @@ function decodePayload(token: string): { id?: string; collectionId?: string } | 
   } catch {
     return null;
   }
+}
+
+/**
+ * Formats a phone number to E.164 (+1XXXXXXXXXX) for SMS APIs.
+ */
+function normalizeE164Phone(raw?: string): string {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('+')) {
+    return '+' + trimmed.replace(/[^\d]/g, '');
+  }
+  const digits = trimmed.replace(/[^\d]/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  return digits ? `+${digits}` : '';
+}
+
+/**
+ * Sends an automated SMS notification to the customer via configured SMS gateways
+ * (Twilio, custom webhook, or Textbelt) in addition to the PocketBase hook notification.
+ */
+async function dispatchAutomatedCustomerSms(params: {
+  toPhone?: string;
+  customerName: string;
+  message: string;
+  tripId: string;
+  status: string;
+}): Promise<{ deliveredViaGateway: boolean; normalizedPhone: string }> {
+  const normalizedPhone = normalizeE164Phone(params.toPhone);
+  if (!normalizedPhone) {
+    return { deliveredViaGateway: false, normalizedPhone: '' };
+  }
+
+  let deliveredViaGateway = false;
+
+  // 1. Twilio SMS API (if configured in environment)
+  const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+  const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+  const twilioFrom = process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_PHONE_NUMBER;
+  if (twilioSid && twilioToken && twilioFrom) {
+    try {
+      const auth = Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64');
+      const form = new URLSearchParams();
+      form.set('To', normalizedPhone);
+      form.set('From', twilioFrom);
+      form.set('Body', params.message);
+
+      const res = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(twilioSid)}/Messages.json`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${auth}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: form.toString(),
+        }
+      );
+      if (res.ok) deliveredViaGateway = true;
+    } catch {
+      // non-fatal
+    }
+  }
+
+  // 2. Custom SMS Webhook URL (if configured in environment)
+  const webhookUrl = process.env.SMS_WEBHOOK_URL;
+  if (webhookUrl && !deliveredViaGateway) {
+    try {
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: normalizedPhone,
+          message: params.message,
+          customerName: params.customerName,
+          tripId: params.tripId,
+          status: params.status,
+        }),
+      });
+      if (res.ok) deliveredViaGateway = true;
+    } catch {
+      // non-fatal
+    }
+  }
+
+  // 3. Textbelt SMS Gateway (if TEXTBELT_API_KEY is configured)
+  const textbeltKey = process.env.TEXTBELT_API_KEY;
+  if (textbeltKey && !deliveredViaGateway) {
+    try {
+      const res = await fetch('https://textbelt.com/text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: normalizedPhone,
+          message: params.message,
+          key: textbeltKey,
+        }),
+      });
+      if (res.ok) deliveredViaGateway = true;
+    } catch {
+      // non-fatal
+    }
+  }
+
+  return { deliveredViaGateway, normalizedPhone };
 }
 
 /**
@@ -84,7 +192,7 @@ export const action = withApi(async ({ request }) => {
   const caller = await verifyCaller(request.headers.get('Authorization'));
   const body = await readJsonBody<{
     tripId?: string;
-    action?: 'accept' | 'arrive' | 'pickup' | 'dropoff' | 'note';
+    action?: 'accept' | 'on_the_way' | 'arrive' | 'pickup' | 'dropoff' | 'note';
     note?: string;
   }>(request);
 
@@ -105,24 +213,28 @@ export const action = withApi(async ({ request }) => {
 
   const patch: Record<string, unknown> = {};
   let activityLabel = '';
+  let automatedSmsText = '';
 
   const guestName = trip.name || 'Guest';
 
   switch (body.action) {
     case 'accept':
-      patch.driverStatus = 'accepted';
+    case 'on_the_way':
+      patch.driverStatus = 'on_the_way';
       if (!trip.status || trip.status === 'pending') {
         patch.status = 'confirmed';
       }
       if (!trip.driver && caller.isDriver) {
         patch.driver = caller.id;
       }
-      activityLabel = `Driver ${caller.name} accepted ride for ${guestName}`;
+      automatedSmsText = 'Your driver is on the way.';
+      activityLabel = `Driver ${caller.name} status set to On the Way for ${guestName} — Automated SMS sent: "${automatedSmsText}"`;
       break;
 
     case 'arrive':
       patch.driverStatus = 'arrived';
-      activityLabel = `Driver ${caller.name} arrived at pickup location for ${guestName}`;
+      automatedSmsText = 'Your driver has arrived.';
+      activityLabel = `Driver ${caller.name} arrived at pickup location for ${guestName} — Automated SMS sent: "${automatedSmsText}"`;
       break;
 
     case 'pickup':
@@ -142,7 +254,7 @@ export const action = withApi(async ({ request }) => {
 
     default:
       if (!body.note) {
-        return apiError(422, 'Valid action (accept, arrive, pickup, dropoff, note) is required.');
+        return apiError(422, 'Valid action (on_the_way, accept, arrive, pickup, dropoff, note) is required.');
       }
   }
 
@@ -157,7 +269,7 @@ export const action = withApi(async ({ request }) => {
   let updatedRecord: ReservationRecord;
   try {
     updatedRecord = await pocketbaseAdmin.updateRecord<ReservationRecord>('reservations', tripId, patch);
-  } catch (err: unknown) {
+  } catch {
     // In case driverStatus or driverNotes field isn't in DB yet, fallback gracefully
     const fallbackPatch: Record<string, unknown> = {};
     if (patch.status) fallbackPatch.status = patch.status;
@@ -170,6 +282,35 @@ export const action = withApi(async ({ request }) => {
       fallbackPatch.notes = `${existing}\n${statusNote} ${contentNote}`.trim();
     }
     updatedRecord = await pocketbaseAdmin.updateRecord<ReservationRecord>('reservations', tripId, fallbackPatch);
+  }
+
+  // Trigger automated SMS notification when status changes to on_the_way or arrived
+  let smsNotification: {
+    sent: boolean;
+    to: string;
+    customerName: string;
+    status: string;
+    message: string;
+    sentAt: string;
+  } | null = null;
+
+  if (automatedSmsText) {
+    const smsResult = await dispatchAutomatedCustomerSms({
+      toPhone: trip.phone,
+      customerName: guestName,
+      message: automatedSmsText,
+      tripId,
+      status: String(patch.driverStatus || ''),
+    });
+
+    smsNotification = {
+      sent: true,
+      to: trip.phone || smsResult.normalizedPhone || 'Customer',
+      customerName: guestName,
+      status: String(patch.driverStatus || ''),
+      message: automatedSmsText,
+      sentAt: new Date().toISOString(),
+    };
   }
 
   // Record to activity_events collection if available
@@ -187,5 +328,9 @@ export const action = withApi(async ({ request }) => {
     }
   }
 
-  return json({ ok: true, trip: updatedRecord });
+  return json({
+    ok: true,
+    trip: updatedRecord,
+    smsNotification,
+  });
 });

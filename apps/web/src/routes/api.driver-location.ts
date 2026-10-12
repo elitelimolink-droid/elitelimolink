@@ -129,7 +129,7 @@ export const loader = withApi(async ({ request }) => {
     const assigned = activeReservations.filter((r) => r.driver === d.id);
     // Prioritize in-progress or upcoming trip
     const activeTrip =
-      assigned.find((r) => r.driverStatus === 'on_board' || r.driverStatus === 'arrived' || r.driverStatus === 'accepted') ||
+      assigned.find((r) => r.driverStatus === 'on_board' || r.driverStatus === 'arrived' || r.driverStatus === 'on_the_way' || r.driverStatus === 'accepted') ||
       assigned.find((r) => r.status === 'confirmed' || r.status === 'pending') ||
       assigned[0] ||
       null;
