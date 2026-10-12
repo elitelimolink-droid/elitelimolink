@@ -137,40 +137,6 @@ export function DriverBoard({
   const [driveMenuOpen, setDriveMenuOpen] = useState(false);
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
 
-  // 10-minute auto-expiry for completed / passed trips ("pass isler 10 dakika sonra kayip olsun")
-  const TEN_MINUTES_MS = 10 * 60 * 1000;
-  const [completedTimes, setCompletedTimes] = useState<Record<string, number>>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('ell_driver_completed_times');
-        if (saved) return JSON.parse(saved);
-      } catch {}
-    }
-    return {};
-  });
-
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 15000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  function isTripExpired(t: AssignedTrip): boolean {
-    const stage = getTripStage(t);
-    if (stage !== 4) return false;
-    const compTime = completedTimes[t.id];
-    if (compTime) {
-      return (now - compTime) > TEN_MINUTES_MS;
-    }
-    if (t.pickupAt) {
-      const pTime = new Date(t.pickupAt).getTime();
-      if (!Number.isNaN(pTime) && (now - pTime) > TEN_MINUTES_MS) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   // Trip action progression state
   const [actingTripId, setActingTripId] = useState('');
   const [actionError, setActionError] = useState('');
@@ -306,14 +272,6 @@ export function DriverBoard({
           return { ...t, driverStatus: 'on_board' };
         }
         if (action === 'dropoff') {
-          const finishedAt = Date.now();
-          setCompletedTimes((prev) => {
-            const next = { ...prev, [tripId]: finishedAt };
-            try {
-              localStorage.setItem('ell_driver_completed_times', JSON.stringify(next));
-            } catch {}
-            return next;
-          });
           return { ...t, driverStatus: 'dropped_off', status: 'completed' };
         }
         return t;
@@ -782,8 +740,7 @@ export function DriverBoard({
   }, [trips]);
 
   const filteredTrips = useMemo(() => {
-    // "sofor bolumundeki pass isler 10 dakika sonra kayip olsun"
-    let list = sorted.filter((t) => !isTripExpired(t));
+    let list = sorted;
     if (activeTab === 'upcoming') {
       list = list.filter((t) => getTripStage(t) < 4);
     } else if (activeTab === 'past') {
@@ -803,7 +760,7 @@ export function DriverBoard({
       );
     }
     return list;
-  }, [sorted, activeTab, search, now, completedTimes]);
+  }, [sorted, activeTab, search]);
 
   return (
     <div className="driver-app-shell">
@@ -984,19 +941,6 @@ export function DriverBoard({
               <div className="driver-drivemenu-section">
                 <span className="driver-drivemenu-label">Assistance &amp; Session</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <a
-                    href="/dashboard"
-                    className="driver-drivemenu-link"
-                    style={{
-                      background: '#1e293b',
-                      color: '#60a5fa',
-                      border: '1px solid #3b82f6',
-                      fontWeight: 700,
-                      textDecoration: 'none',
-                    }}
-                  >
-                    <ExternalLink size={15} color="#60a5fa" /> Dispatch Dashboard (Operatör Paneli)
-                  </a>
                   <a href="tel:+12015550199" className="driver-drivemenu-link btn-dispatch">
                     <Phone size={15} color="#ffffff" /> Call Central Dispatch (Office)
                   </a>
@@ -1030,25 +974,6 @@ export function DriverBoard({
           </button>
           <h1 className="driver-app-title">My Trips</h1>
           <div className="driver-app-header-right">
-            <a
-              href="/dashboard"
-              style={{
-                textDecoration: 'none',
-                fontSize: 11,
-                fontWeight: 700,
-                color: '#93c5fd',
-                background: '#1e293b',
-                padding: '5px 9px',
-                borderRadius: 6,
-                border: '1px solid #334155',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-              title="Dispatch Dashboard'a Geç"
-            >
-              Dispatch →
-            </a>
             <span className="driver-duty-badge" title="Live status">
               <span className="driver-duty-dot" /> On Duty
             </span>
