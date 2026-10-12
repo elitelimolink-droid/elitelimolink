@@ -829,46 +829,46 @@ export function DriverBoard({
                   </button>
                   <button
                     type="button"
-                    className={`driver-drivemenu-link${activeTab === 'upcoming' ? ' active' : ''}`}
+                    className={`driver-drivemenu-link btn-upcoming${activeTab === 'upcoming' ? ' active' : ''}`}
                     onClick={() => {
                       setDriveMenuOpen(false);
                       setActiveTab('upcoming');
                     }}
                   >
-                    <Sparkles size={16} /> Upcoming Trips
-                    <span className="badge-pill" style={{ marginLeft: 'auto' }}>{stats.active}</span>
+                    <Sparkles size={16} color="#818cf8" /> Upcoming Trips
+                    <span className="badge-pill" style={{ marginLeft: 'auto', background: '#312e81', color: '#c7d2fe' }}>{stats.active}</span>
                   </button>
                   <button
                     type="button"
-                    className={`driver-drivemenu-link${activeTab === 'past' ? ' active' : ''}`}
+                    className={`driver-drivemenu-link btn-past${activeTab === 'past' ? ' active' : ''}`}
                     onClick={() => {
                       setDriveMenuOpen(false);
                       setActiveTab('past');
                     }}
                   >
-                    <CheckCircle2 size={16} /> Completed Rides
-                    <span className="badge-pill" style={{ marginLeft: 'auto' }}>{stats.completed}</span>
+                    <CheckCircle2 size={16} color="#34d399" /> Completed Rides
+                    <span className="badge-pill" style={{ marginLeft: 'auto', background: '#064e3b', color: '#a7f3d0' }}>{stats.completed}</span>
                   </button>
                   <button
                     type="button"
-                    className={`driver-drivemenu-link${activeTab === 'all' ? ' active' : ''}`}
+                    className={`driver-drivemenu-link btn-all${activeTab === 'all' ? ' active' : ''}`}
                     onClick={() => {
                       setDriveMenuOpen(false);
                       setActiveTab('all');
                     }}
                   >
-                    <Calendar size={16} /> All Trips Schedule
-                    <span className="badge-pill" style={{ marginLeft: 'auto' }}>{stats.total}</span>
+                    <Calendar size={16} color="#38bdf8" /> All Trips Schedule
+                    <span className="badge-pill" style={{ marginLeft: 'auto', background: '#0c4a6e', color: '#bae6fd' }}>{stats.total}</span>
                   </button>
                   <button
                     type="button"
-                    className={`driver-drivemenu-link${activeTab === 'settings' ? ' active' : ''}`}
+                    className={`driver-drivemenu-link btn-settings${activeTab === 'settings' ? ' active' : ''}`}
                     onClick={() => {
                       setDriveMenuOpen(false);
                       setActiveTab('settings');
                     }}
                   >
-                    <Settings size={16} /> Profile &amp; Vehicle
+                    <Settings size={16} color="#fbbf24" /> Profile &amp; Vehicle
                   </button>
                 </div>
               </div>
@@ -941,19 +941,18 @@ export function DriverBoard({
               <div className="driver-drivemenu-section">
                 <span className="driver-drivemenu-label">Assistance &amp; Session</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <a href="tel:+12015550199" className="driver-drivemenu-link">
-                    <Phone size={15} color="#eab308" /> Call Central Dispatch (Office)
+                  <a href="tel:+12015550199" className="driver-drivemenu-link btn-dispatch">
+                    <Phone size={15} color="#ffffff" /> Call Central Dispatch (Office)
                   </a>
                   <button
                     type="button"
-                    className="driver-drivemenu-link"
-                    style={{ color: '#ef4444' }}
+                    className="driver-drivemenu-link btn-signout"
                     onClick={() => {
                       setDriveMenuOpen(false);
                       signOut();
                     }}
                   >
-                    <LogOut size={15} /> Sign Out (Chauffeur Portal)
+                    <LogOut size={15} color="#ffffff" /> Sign Out (Chauffeur Portal)
                   </button>
                 </div>
               </div>
@@ -1029,10 +1028,10 @@ export function DriverBoard({
                   <div className="driver-app-empty">
                     <div className="driver-empty-illustration">
                       <svg width="220" height="150" viewBox="0 0 220 150" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <ellipse cx="68" cy="136" rx="26" ry="7" fill="#cbd5e1" opacity="0.75" />
-                        <ellipse cx="172" cy="116" rx="15" ry="4.5" fill="#cbd5e1" opacity="0.6" />
-                        <path d="M 80 130 C 105 100 135 95 170 114" stroke="#e2e8f0" strokeWidth="8" strokeLinecap="round" />
-                        <path d="M172 78 C160 78 150 88 150 100 C150 116 172 130 172 130 C172 130 194 116 194 100 C194 88 184 78 172 78 Z" fill="#93c5fd" />
+                        <ellipse cx="68" cy="136" rx="26" ry="7" fill="#000000" opacity="0.7" />
+                        <ellipse cx="172" cy="116" rx="15" ry="4.5" fill="#000000" opacity="0.5" />
+                        <path d="M 80 130 C 105 100 135 95 170 114" stroke="#334155" strokeWidth="8" strokeLinecap="round" />
+                        <path d="M172 78 C160 78 150 88 150 100 C150 116 172 130 172 130 C172 130 194 116 194 100 C194 88 184 78 172 78 Z" fill="#38bdf8" />
                         <circle cx="172" cy="98" r="6" fill="#ffffff" />
                         <path d="M68 28 C45 28 26 47 26 70 C26 102 68 132 68 132 C68 132 110 102 110 70 C110 47 91 28 68 28 Z" fill="#2563eb" />
                         <g transform="translate(48, 52)">
