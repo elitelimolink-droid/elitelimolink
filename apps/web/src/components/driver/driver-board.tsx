@@ -496,6 +496,13 @@ export function DriverBoard({
 
     void enableWakeLock();
 
+    // Acquire on first touch/tap if browser requires user gesture
+    function onUserGesture() {
+      void enableWakeLock();
+    }
+    window.addEventListener('pointerdown', onUserGesture, { once: true });
+    window.addEventListener('touchstart', onUserGesture, { once: true });
+
     // Re-acquire wake lock and trigger GPS broadcast when phone screen turns on / unlocks
     function onWakeOrFocus() {
       if (document.visibilityState === 'visible') {
@@ -510,6 +517,8 @@ export function DriverBoard({
 
     return () => {
       isMounted = false;
+      window.removeEventListener('pointerdown', onUserGesture);
+      window.removeEventListener('touchstart', onUserGesture);
       document.removeEventListener('visibilitychange', onWakeOrFocus);
       window.removeEventListener('focus', onWakeOrFocus);
       window.removeEventListener('pageshow', onWakeOrFocus);
@@ -1442,6 +1451,10 @@ export function DriverBoard({
               {/* Standby Topbar */}
               <header className="driver-driveview-topbar">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
+                    <span className="brand-mark" style={{ width: 24, height: 24, fontSize: 11, borderRadius: 6 }}>E<span>L</span></span>
+                    <span style={{ fontSize: 13, fontWeight: 900, color: '#fff', letterSpacing: '.04em' }}>ELITELIMOLINK</span>
+                  </div>
                   <button
                     type="button"
                     className="driver-tool-btn"
@@ -1678,6 +1691,10 @@ export function DriverBoard({
 
             <header className="driver-driveview-topbar">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
+                  <span className="brand-mark" style={{ width: 24, height: 24, fontSize: 11, borderRadius: 6 }}>E<span>L</span></span>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: '#fff', letterSpacing: '.04em' }}>ELITELIMOLINK</span>
+                </div>
                 <button
                   type="button"
                   className="driver-tool-btn"
