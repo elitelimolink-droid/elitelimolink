@@ -1501,58 +1501,5 @@ html.dark .driver-route-connector::before { background: repeating-linear-gradien
 .driver-active-filter-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
 html.dark .driver-active-filter-pill { background: #1e293b; color: #38bdf8; border-color: #334155; }
 
-/* Chauffeur Mobile App Shell - Sleek Black Background, White Typography & Vibrant Accents */
-.driver-app-shell { min-height: 100dvh; background: #030712; color: #ffffff; display: flex; flex-direction: column; position: relative; overflow-x: hidden; }
-
-.driver-app-container { width: 100%; max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; flex: 1; background: #080d1a; min-height: 100dvh; box-shadow: 0 0 50px rgba(0,0,0,0.8); border-left: 1px solid #111827; border-right: 1px solid #111827; }
-
-/* App Top Header */
-.driver-app-header { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: #090e1c; border-bottom: 1px solid #1e293b; gap: 12px; }
-
-.driver-app-menu-btn { background: #131d31; border: 1px solid #1e293b; cursor: pointer; color: #38bdf8; padding: 7px; margin-left: -4px; display: grid; place-items: center; border-radius: 9px; transition: all .15s ease; }
-.driver-app-menu-btn:hover { background: #1e2b45; color: #7dd3fc; border-color: #38bdf8; }
-
-.driver-app-title { font-size: 21px; font-weight: 800; color: #ffffff; margin: 0; flex: 1; letter-spacing: -0.02em; }
-
-.driver-app-header-right { display: flex; align-items: center; gap: 8px; }
-
-/* App Two-Tab Bar (UPCOMING / PAST) */
-.driver-app-tabs { position: sticky; top: 57px; z-index: 39; display: flex; background: #090e1c; border-bottom: 2px solid #1e293b; }
-
-.driver-app-tab { flex: 1; text-align: center; padding: 13px 8px; font-size: 13.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; background: transparent; border: 0; cursor: pointer; color: #94a3b8; border-bottom: 3px solid transparent; transition: all .15s ease; }
-.driver-app-tab:hover { color: #38bdf8; }
-.driver-app-tab.active { color: #38bdf8; border-bottom-color: #38bdf8; text-shadow: 0 0 14px rgba(56, 189, 248, 0.4); font-weight: 900; }
-
-/* App Content Area */
-.driver-app-body { flex: 1; padding: 18px 16px 40px; display: flex; flex-direction: column; background: #080d1a; color: #ffffff; }
-
-/* Native App Empty State Illustration & Typography */
-.driver-app-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; margin: auto 0; padding: 50px 20px 70px; }
-.driver-empty-illustration { margin-bottom: 24px; }
-.driver-empty-title { font-size: 22px; font-weight: 800; color: #ffffff; margin: 0 0 8px; letter-spacing: -0.01em; }
-.driver-empty-desc { font-size: 14px; color: #94a3b8; margin: 0; line-height: 1.5; max-width: 320px; }
-
-/* In-App Trip Mission Card */
-.driver-app-card { background: #0f172a; border: 1px solid #1e293b; border-radius: 18px; padding: 16px 18px; margin-bottom: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 14px; transition: transform .15s ease, box-shadow .15s ease; }
-.driver-app-card.active-mission { border-color: #2563eb; box-shadow: 0 0 25px rgba(37,99,235,0.25); }
-
-/* Route Card in Dark Mode - Crisp Typography & Vibrant Leg Badges */
-.driver-app-card .driver-route-card { background: #131d2e; border-color: #1e293b; box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
-.driver-app-card .driver-route-address { color: #ffffff; font-weight: 800; font-size: 18px; }
-.driver-app-card .driver-route-connector::before { background: repeating-linear-gradient(to bottom, #38bdf8 0, #38bdf8 4px, transparent 4px, transparent 8px); }
-
-/* Colorful Drawer Menu Items */
-.driver-drivemenu-link.btn-upcoming { background: #131d31; color: #818cf8; border: 1px solid #3730a3; }
-.driver-drivemenu-link.btn-upcoming:hover { background: #1e1b4b; color: #a5b4fc; }
-.driver-drivemenu-link.btn-past { background: #062820; color: #34d399; border: 1px solid #047857; }
-.driver-drivemenu-link.btn-past:hover { background: #064e3b; color: #6ee7b7; }
-.driver-drivemenu-link.btn-all { background: #082438; color: #38bdf8; border: 1px solid #0369a1; }
-.driver-drivemenu-link.btn-all:hover { background: #0c4a6e; color: #7dd3fc; }
-.driver-drivemenu-link.btn-settings { background: #2a1b06; color: #fbbf24; border: 1px solid #854d0e; }
-.driver-drivemenu-link.btn-settings:hover { background: #451a03; color: #fde047; }
-.driver-drivemenu-link.btn-dispatch { background: #b45309; color: #ffffff; font-weight: 800; }
-.driver-drivemenu-link.btn-signout { background: #991b1b; color: #ffffff; font-weight: 800; }
-
-
 
 
