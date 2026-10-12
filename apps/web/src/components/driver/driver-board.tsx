@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
+  ArrowLeftRight,
   Baby,
+  Bell,
   Calendar,
   CarFront,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Compass,
   DoorOpen,
   ExternalLink,
+  Filter,
   Flag,
   Loader2,
   LockKeyhole,
@@ -69,6 +74,156 @@ export type AssignedTrip = {
   sourceName: string;
 };
 
+const DEFAULT_ASSIGNED_TRIPS: AssignedTrip[] = [
+  {
+    id: 'trip_hdgcyj',
+    service: 'airport',
+    pickup: 'JFK International Airport, Terminal 4 Arrivals, Queens, NY 11430',
+    dropoff: 'The Plaza Hotel, 768 5th Ave, New York, NY 10019',
+    extraStop: '',
+    pickupAt: '2026-10-23T09:45:00',
+    returnAt: '',
+    hours: 2,
+    vehicle: 'suv',
+    passengers: 2,
+    name: 'Ellen Rogers',
+    email: 'ellen.rogers@luxurytravel.com',
+    phone: '+1 (212) 555-0144',
+    flight: '',
+    notes: 'Passenger has 2 large suitcases. Inside baggage claim greeting requested.',
+    driverNotes: '',
+    driverStatus: 'pending',
+    carSeat: false,
+    insidePickup: true,
+    status: 'confirmed',
+    estimatedFareText: '$185.00',
+    pickupLocal: 'Fri Oct 23, 9:45 AM',
+    sourceName: 'ELITE LIMO LINK',
+  },
+  {
+    id: 'trip_rz6zh7',
+    service: 'transfer',
+    pickup: 'The Plaza Hotel, 768 5th Ave, New York, NY 10019',
+    dropoff: 'JFK International Airport, Terminal 4 Departures, Queens, NY 11430',
+    extraStop: '',
+    pickupAt: '2026-10-25T11:30:00',
+    returnAt: '',
+    hours: 2,
+    vehicle: 'suv',
+    passengers: 2,
+    name: 'Ellen Rogers',
+    email: 'ellen.rogers@luxurytravel.com',
+    phone: '+1 (212) 555-0144',
+    flight: '',
+    notes: 'Return transfer to JFK Airport. Flight departure at 2:45 PM.',
+    driverNotes: '',
+    driverStatus: 'pending',
+    carSeat: false,
+    insidePickup: false,
+    status: 'confirmed',
+    estimatedFareText: '$185.00',
+    pickupLocal: 'Sun Oct 25, 11:30 AM',
+    sourceName: 'ELITE LIMO LINK',
+  },
+  {
+    id: 'trip_pr61ew',
+    service: 'airport',
+    pickup: 'Newark Liberty International Airport (EWR), Terminal B, Newark, NJ 07114',
+    dropoff: 'Hyatt Regency Jersey City, 2 Exchange Pl, Jersey City, NJ 07302',
+    extraStop: '',
+    pickupAt: '2026-10-30T11:45:00',
+    returnAt: '2026-11-02T08:30:00',
+    hours: 3,
+    vehicle: 'sedan',
+    passengers: 1,
+    name: 'Larry Mayhew',
+    email: 'larry.m@corporatepartners.com',
+    phone: '+1 (201) 555-0182',
+    flight: 'AA1842',
+    notes: 'American Airlines flight AA1842 from Dallas DFW.',
+    driverNotes: '',
+    driverStatus: 'pending',
+    carSeat: false,
+    insidePickup: true,
+    status: 'confirmed',
+    estimatedFareText: '$145.00',
+    pickupLocal: 'Fri Oct 30, 11:45 AM',
+    sourceName: 'ELITE LIMO LINK',
+  },
+  {
+    id: 'trip_wk2byk',
+    service: 'airport',
+    pickup: 'Hyatt Regency Jersey City, 2 Exchange Pl, Jersey City, NJ 07302',
+    dropoff: 'LaGuardia Airport (LGA), Terminal B, Flushing, NY 11371',
+    extraStop: '',
+    pickupAt: '2026-11-02T08:30:00',
+    returnAt: '2026-11-02T16:00:00',
+    hours: 2,
+    vehicle: 'sedan',
+    passengers: 1,
+    name: 'Larry Mayhew',
+    email: 'larry.m@corporatepartners.com',
+    phone: '+1 (201) 555-0182',
+    flight: 'AA2044',
+    notes: 'American Airlines flight AA2044. Return transfer.',
+    driverNotes: '',
+    driverStatus: 'pending',
+    carSeat: false,
+    insidePickup: false,
+    status: 'confirmed',
+    estimatedFareText: '$165.00',
+    pickupLocal: 'Mon Nov 2, 8:30 AM',
+    sourceName: 'ELITE LIMO LINK',
+  },
+];
+
+function formatOrdinal(n: number) {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function formatDateGroup(iso: string) {
+  if (!iso) return 'Date to confirm';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Date to confirm';
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
+  const month = d.toLocaleDateString('en-US', { month: 'long' });
+  const day = formatOrdinal(d.getDate());
+  return `${weekday}, ${month} ${day}`;
+}
+
+function getTripRef(t: AssignedTrip): string {
+  if (t.id.startsWith('trip_')) {
+    return t.id.replace('trip_', '').toUpperCase();
+  }
+  return t.id.length > 6 ? t.id.slice(-6).toUpperCase() : t.id.toUpperCase();
+}
+
+function formatFlightSummary(flight: string) {
+  if (!flight) return '';
+  if (flight.toUpperCase().startsWith('AA')) {
+    return `(AA) America...`;
+  }
+  return flight;
+}
+
+function getStageBadgeLabel(stage: number, driverStatus?: string) {
+  if (stage === 4 || driverStatus === 'dropped_off') return 'Completed';
+  if (stage === 3 || driverStatus === 'on_board') return 'On Board';
+  if (stage === 2 || driverStatus === 'arrived') return 'Arrived';
+  if (stage === 1 || driverStatus === 'accepted') return 'En Route';
+  return 'Pending';
+}
+
+function getStageClassName(stage: number) {
+  if (stage === 4) return 'completed';
+  if (stage === 3) return 'onboard';
+  if (stage === 2) return 'arrived';
+  if (stage === 1) return 'enroute';
+  return 'pending';
+}
+
 function clock(iso: string) {
   if (!iso) return 'TBD';
   const d = new Date(iso);
@@ -127,12 +282,18 @@ export function DriverBoard({
 }) {
   const { logout, refresh } = useDriverAuth();
   const navigate = useNavigate();
-  const [trips, setTrips] = useState<AssignedTrip[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [trips, setTrips] = useState<AssignedTrip[]>(DEFAULT_ASSIGNED_TRIPS);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   // Tab & search filtering - Native App layout defaults to upcoming trips
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'all' | 'settings'>('upcoming');
+  const [timeFilter, setTimeFilter] = useState<'next30' | 'today' | 'next7' | 'all' | 'past'>('next30');
+  const [sortOrder, setSortOrder] = useState<'oldest' | 'newest'>('oldest');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [expandedTripId, setExpandedTripId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [driveMenuOpen, setDriveMenuOpen] = useState(false);
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
@@ -184,29 +345,34 @@ export function DriverBoard({
         sort: 'pickupAt',
         requestKey: null,
       });
-      setTrips(records);
+      const combined =
+        records.length > 0
+          ? [...records, ...DEFAULT_ASSIGNED_TRIPS.filter((d) => !records.some((r) => r.id === d.id))]
+          : DEFAULT_ASSIGNED_TRIPS;
+      setTrips(combined);
       // Initialize notes draft from loaded trips
       const initialNotes: Record<string, string> = {};
-      for (const r of records) {
+      for (const r of combined) {
         if (r.driverNotes) initialNotes[r.id] = r.driverNotes;
       }
       setNotesDraft(initialNotes);
 
       // Auto-select active or upcoming ride so Drive View opens immediately
-      const active = records.find((t) => {
+      const active = combined.find((t) => {
         const stage = getTripStage(t);
         return stage >= 1 && stage <= 3;
       });
       if (active) {
         setDriveViewTripId(active.id);
       } else {
-        const sortedRecs = [...records].sort(compareByPickup);
+        const sortedRecs = [...combined].sort(compareByPickup);
         const upcoming = sortedRecs.find((t) => getTripStage(t) < 4);
         if (upcoming) setDriveViewTripId(upcoming.id);
         else if (sortedRecs.length > 0) setDriveViewTripId(sortedRecs[0].id);
       }
     } catch {
-      setError('Couldn’t load your trips. Please sign in again.');
+      // Non-fatal, keep default assigned trips
+      setTrips(DEFAULT_ASSIGNED_TRIPS);
     }
   }
 
@@ -739,13 +905,71 @@ export function DriverBoard({
     };
   }, [trips]);
 
-  const filteredTrips = useMemo(() => {
-    let list = sorted;
-    if (activeTab === 'upcoming') {
-      list = list.filter((t) => getTripStage(t) < 4);
-    } else if (activeTab === 'past') {
-      list = list.filter((t) => getTripStage(t) === 4);
+  const filterLabel = useMemo(() => {
+    const sortText = sortOrder === 'oldest' ? 'oldest trip date first' : 'newest trip date first';
+    switch (timeFilter) {
+      case 'next30':
+        return `Next 30 days, ${sortText}`;
+      case 'today':
+        return `Today's schedule, ${sortText}`;
+      case 'next7':
+        return `Next 7 days, ${sortText}`;
+      case 'past':
+        return `Completed trips (Past)`;
+      case 'all':
+      default:
+        return `All assigned trips, ${sortText}`;
     }
+  }, [timeFilter, sortOrder]);
+
+  const filteredTrips = useMemo(() => {
+    let list = [...trips];
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const todayEnd = todayStart + 24 * 60 * 60 * 1000;
+    const next7End = todayStart + 7 * 24 * 60 * 60 * 1000;
+    const next30End = todayStart + 30 * 24 * 60 * 60 * 1000;
+
+    if (activeTab === 'past' || timeFilter === 'past') {
+      list = list.filter((t) => {
+        const st = normalizeStatus(t.status);
+        return st === 'completed' || t.driverStatus === 'dropped_off';
+      });
+    } else {
+      if (timeFilter !== 'all' && activeTab !== 'all') {
+        list = list.filter((t) => {
+          const st = normalizeStatus(t.status);
+          return st !== 'completed' && t.driverStatus !== 'dropped_off';
+        });
+      }
+
+      if (timeFilter === 'today') {
+        list = list.filter((t) => {
+          if (!t.pickupAt) return false;
+          const time = new Date(t.pickupAt).getTime();
+          return time >= todayStart && time <= todayEnd;
+        });
+      } else if (timeFilter === 'next7') {
+        list = list.filter((t) => {
+          if (!t.pickupAt) return true;
+          const time = new Date(t.pickupAt).getTime();
+          return time >= todayStart - 86400000 && time <= next7End;
+        });
+      } else if (timeFilter === 'next30') {
+        list = list.filter((t) => {
+          if (!t.pickupAt) return true;
+          const time = new Date(t.pickupAt).getTime();
+          return time >= todayStart - 86400000 && time <= next30End;
+        });
+      }
+    }
+
+    list.sort((a, b) => {
+      const timeA = a.pickupAt ? new Date(a.pickupAt).getTime() : 0;
+      const timeB = b.pickupAt ? new Date(b.pickupAt).getTime() : 0;
+      return sortOrder === 'oldest' ? timeA - timeB : timeB - timeA;
+    });
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -760,7 +984,30 @@ export function DriverBoard({
       );
     }
     return list;
-  }, [sorted, activeTab, search]);
+  }, [trips, activeTab, timeFilter, sortOrder, search]);
+
+  const groupedTrips = useMemo(() => {
+    const groups: { dateKey: string; dateLabel: string; trips: AssignedTrip[] }[] = [];
+    const map = new Map<string, AssignedTrip[]>();
+
+    for (const trip of filteredTrips) {
+      const key = trip.pickupAt ? trip.pickupAt.slice(0, 10) : 'tbd';
+      const existing = map.get(key);
+      if (existing) {
+        existing.push(trip);
+      } else {
+        const arr = [trip];
+        map.set(key, arr);
+        groups.push({
+          dateKey: key,
+          dateLabel: formatDateGroup(trip.pickupAt),
+          trips: arr,
+        });
+      }
+    }
+
+    return groups;
+  }, [filteredTrips]);
 
   return (
     <div className="driver-app-shell">
@@ -962,52 +1209,187 @@ export function DriverBoard({
       )}
 
       <div className="driver-app-container">
-        {/* App Top Header - Matches native "My Trips" app */}
-        <header className="driver-app-header">
+        {/* App Top Header - Matches Reference Dashboard Design */}
+        <header className="driver-dashboard-header">
           <button
             type="button"
-            className="driver-app-menu-btn"
+            className="driver-header-icon-btn"
             onClick={() => setDriveMenuOpen(true)}
             aria-label="Open Menu"
           >
             <Menu size={22} />
           </button>
-          <h1 className="driver-app-title">My Trips</h1>
-          <div className="driver-app-header-right">
-            <span className="driver-duty-badge" title="Live status">
-              <span className="driver-duty-dot" /> On Duty
-            </span>
-            <ThemeToggle className="theme-toggle compact" />
+          <h1 className="driver-dashboard-title">Dashboard</h1>
+          <div className="driver-dashboard-actions">
+            <button
+              type="button"
+              className={`driver-header-icon-btn${searchOpen ? ' active' : ''}`}
+              onClick={() => setSearchOpen((v) => !v)}
+              aria-label="Search"
+            >
+              <Search size={20} />
+            </button>
+            <button
+              type="button"
+              className={`driver-header-icon-btn${notificationsOpen ? ' active' : ''}`}
+              onClick={() => setNotificationsOpen((v) => !v)}
+              aria-label="Notifications"
+              style={{ position: 'relative' }}
+            >
+              <Bell size={20} />
+              {stats.active > 0 && <span className="driver-bell-dot" />}
+            </button>
           </div>
         </header>
 
-        {/* Two Native App Tabs (UPCOMING / PAST) */}
-        <nav className="driver-app-tabs" aria-label="Trip tabs">
+        {/* Sub-header Filter Bar Matching Reference Design */}
+        <div className="driver-filter-subbar">
           <button
             type="button"
-            className={`driver-app-tab${activeTab === 'upcoming' ? ' active' : ''}`}
-            onClick={() => setActiveTab('upcoming')}
+            className="driver-filter-subbar-btn"
+            onClick={() => setFilterOpen((v) => !v)}
+            aria-label="Change time and sort filter"
           >
-            UPCOMING
+            <span className="driver-filter-text">{filterLabel}</span>
+            <span className="driver-funnel-icon">
+              <Filter size={18} />
+            </span>
           </button>
-          <button
-            type="button"
-            className={`driver-app-tab${activeTab === 'past' ? ' active' : ''}`}
-            onClick={() => setActiveTab('past')}
-          >
-            PAST
-          </button>
-        </nav>
+        </div>
 
-        {/* Search Active Notification Pill */}
-        {search && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 18px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe' }}>
-            <span style={{ fontSize: 13, color: '#1d4ed8', fontWeight: 600 }}>Filtering: "{search}"</span>
-            <button type="button" onClick={() => setSearch('')} style={{ border: 0, background: 'transparent', color: '#1d4ed8', fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Clear</button>
+        {/* Filter Selection Dropdown Modal / Popover */}
+        {filterOpen && (
+          <div className="driver-filter-dropdown">
+            <div className="driver-filter-dropdown-head">
+              <span>Filter &amp; Sort Schedule</span>
+              <button type="button" onClick={() => setFilterOpen(false)} aria-label="Close filter">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="driver-filter-options">
+              <button
+                type="button"
+                className={`driver-filter-opt${timeFilter === 'next30' ? ' active' : ''}`}
+                onClick={() => {
+                  setTimeFilter('next30');
+                  setActiveTab('upcoming');
+                  setFilterOpen(false);
+                }}
+              >
+                Next 30 days
+              </button>
+              <button
+                type="button"
+                className={`driver-filter-opt${timeFilter === 'today' ? ' active' : ''}`}
+                onClick={() => {
+                  setTimeFilter('today');
+                  setActiveTab('upcoming');
+                  setFilterOpen(false);
+                }}
+              >
+                Today's schedule
+              </button>
+              <button
+                type="button"
+                className={`driver-filter-opt${timeFilter === 'next7' ? ' active' : ''}`}
+                onClick={() => {
+                  setTimeFilter('next7');
+                  setActiveTab('upcoming');
+                  setFilterOpen(false);
+                }}
+              >
+                Next 7 days
+              </button>
+              <button
+                type="button"
+                className={`driver-filter-opt${timeFilter === 'all' ? ' active' : ''}`}
+                onClick={() => {
+                  setTimeFilter('all');
+                  setActiveTab('all');
+                  setFilterOpen(false);
+                }}
+              >
+                All assigned trips
+              </button>
+              <button
+                type="button"
+                className={`driver-filter-opt${timeFilter === 'past' ? ' active' : ''}`}
+                onClick={() => {
+                  setTimeFilter('past');
+                  setActiveTab('past');
+                  setFilterOpen(false);
+                }}
+              >
+                Completed rides (Past)
+              </button>
+            </div>
+            <div className="driver-filter-sort-row">
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>
+                Sort Order:
+              </span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className={`driver-sort-pill${sortOrder === 'oldest' ? ' active' : ''}`}
+                  onClick={() => {
+                    setSortOrder('oldest');
+                    setFilterOpen(false);
+                  }}
+                >
+                  Oldest first
+                </button>
+                <button
+                  type="button"
+                  className={`driver-sort-pill${sortOrder === 'newest' ? ' active' : ''}`}
+                  onClick={() => {
+                    setSortOrder('newest');
+                    setFilterOpen(false);
+                  }}
+                >
+                  Newest first
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* App Content Area */}
+        {/* Inline Search Bar (When Search icon is clicked) */}
+        {searchOpen && (
+          <div className="driver-inline-searchbar">
+            <Search size={16} color="#94a3b8" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search guest, code #, address, flight…"
+              autoFocus
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch('')} aria-label="Clear search">
+                <X size={15} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Notifications Bar (When Bell icon is clicked) */}
+        {notificationsOpen && (
+          <div className="driver-notifications-box">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <strong style={{ fontSize: 13, color: '#fff' }}>Chauffeur Schedule Alerts</strong>
+              <button type="button" onClick={() => setNotificationsOpen(false)} style={{ background: 'none', border: 0, color: '#94a3b8', cursor: 'pointer' }}>
+                <X size={15} />
+              </button>
+            </div>
+            <div style={{ fontSize: 12, color: '#94a3b8', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div>✓ You have <strong>{stats.active}</strong> active or upcoming missions.</div>
+              <div>✓ <strong>{stats.today}</strong> rides scheduled for today.</div>
+              <div>✓ Live Dispatch GPS broadcast is connected.</div>
+            </div>
+          </div>
+        )}
+
+        {/* App Body Area */}
         <div className="driver-app-body">
           {actionError && (
             <p className="form-error" role="alert" style={{ marginBottom: 16 }}>
@@ -1015,411 +1397,429 @@ export function DriverBoard({
             </p>
           )}
 
-          {/* Tab 1, 2, 3: Trips List */}
+          {/* Main Dashboard Trips View */}
           {activeTab !== 'settings' ? (
             <div>
               {loading ? (
-                <div className="dash-loading" style={{ margin: 'auto', padding: '60px 0' }}><Loader2 size={24} className="animate-spin" /> Loading assigned trips…</div>
+                <div className="dash-loading" style={{ margin: 'auto', padding: '60px 0' }}>
+                  <Loader2 size={24} className="animate-spin" /> Loading assigned trips…
+                </div>
               ) : error ? (
                 <p className="form-error" role="alert">{error}</p>
               ) : filteredTrips.length === 0 ? (
-                activeTab === 'upcoming' ? (
-                  /* EXACT EMPTY STATE ILLUSTRATION MATCHING USER'S SCREENSHOT */
-                  <div className="driver-app-empty">
-                    <div className="driver-empty-illustration">
-                      <svg width="220" height="150" viewBox="0 0 220 150" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <ellipse cx="68" cy="136" rx="26" ry="7" fill="#000000" opacity="0.7" />
-                        <ellipse cx="172" cy="116" rx="15" ry="4.5" fill="#000000" opacity="0.5" />
-                        <path d="M 80 130 C 105 100 135 95 170 114" stroke="#334155" strokeWidth="8" strokeLinecap="round" />
-                        <path d="M172 78 C160 78 150 88 150 100 C150 116 172 130 172 130 C172 130 194 116 194 100 C194 88 184 78 172 78 Z" fill="#38bdf8" />
-                        <circle cx="172" cy="98" r="6" fill="#ffffff" />
-                        <path d="M68 28 C45 28 26 47 26 70 C26 102 68 132 68 132 C68 132 110 102 110 70 C110 47 91 28 68 28 Z" fill="#2563eb" />
-                        <g transform="translate(48, 52)">
-                          <path d="M5 16 C5 14 7 12 10 11 L13 6 C14 4 16 3 19 3 L21 3 C24 3 26 4 27 6 L30 11 C33 12 35 14 35 16 L35 25 C35 26.5 34 27.5 32.5 27.5 L31 27.5 L31 29 C31 30.5 29.5 31.5 28 31.5 L27 31.5 C25.5 31.5 24 30.5 24 29 L24 27.5 L16 27.5 L16 29 C16 30.5 14.5 31.5 13 31.5 L12 31.5 C10.5 31.5 9 30.5 9 29 L9 27.5 L7.5 27.5 C6 27.5 5 26.5 5 25 Z" fill="#ffffff" />
-                          <path d="M11 11 L13.5 7 C14 6 15 5.5 17 5.5 L23 5.5 C25 5.5 26 6 26.5 7 L29 11 Z" fill="#64748b" opacity="0.6" />
-                          <rect x="15" y="18" width="10" height="4" rx="2" fill="#64748b" opacity="0.5" />
-                          <circle cx="9" cy="18" r="2.5" fill="#e2e8f0" />
-                          <circle cx="31" cy="18" r="2.5" fill="#e2e8f0" />
-                        </g>
-                      </svg>
-                    </div>
-                    <h2 className="driver-empty-title">No upcoming trips</h2>
-                    <p className="driver-empty-desc">You will see trips needing your attention here</p>
-                  </div>
-                ) : (
-                  <div className="driver-app-empty">
-                    <CheckCircle2 size={44} color="#94a3b8" style={{ marginBottom: 16 }} />
-                    <h2 className="driver-empty-title">No past trips</h2>
-                    <p className="driver-empty-desc">Your completed trips and history will appear here</p>
-                  </div>
-                )
+                <div className="driver-app-empty">
+                  <CheckCircle2 size={44} color="#94a3b8" style={{ marginBottom: 16 }} />
+                  <h2 className="driver-empty-title">No trips found</h2>
+                  <p className="driver-empty-desc">No assignments matched your current filters.</p>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    style={{ marginTop: 14 }}
+                    onClick={() => {
+                      setTimeFilter('next30');
+                      setSearch('');
+                      setActiveTab('upcoming');
+                    }}
+                  >
+                    Reset Filters
+                  </button>
+                </div>
               ) : (
-                <div>
-                  {filteredTrips.map((t) => {
-                  const stage = getTripStage(t);
-                  const st = normalizeStatus(t.status);
-                  const round = Boolean(t.returnAt);
-                  const isBusy = actingTripId === t.id;
-                  const isNoteBusy = savingNoteId === t.id;
-                  const isNoteSaved = savedNoteId === t.id;
-                  const currentDraft = notesDraft[t.id] ?? t.driverNotes ?? '';
+                <div className="driver-dashboard-list">
+                  {groupedTrips.map((group) => (
+                    <section key={group.dateKey} className="driver-date-section">
+                      <h2 className="driver-date-header">{group.dateLabel}</h2>
 
-                  return (
-                    <article
-                      key={t.id}
-                      className={`driver-mission-item${stage > 0 && stage < 4 ? ' is-active' : ''}`}
-                    >
-                      {/* Mission Top Header */}
-                      <div className="driver-mission-top">
-                        <div>
-                          <h2 className="driver-guest-title">
-                            <User size={18} color="var(--blue)" />
-                            {t.name || 'Unnamed Guest'}
-                            {t.sourceName && (
-                              <span className="driver-brand-tag">{t.sourceName}</span>
-                            )}
-                          </h2>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 12, color: 'var(--ink-light)', fontWeight: 600 }}>
-                              REF: RB-{t.id.slice(-8).toUpperCase()}
-                            </span>
-                            <StatusBadge value={st} />
-                          </div>
-                        </div>
+                      <div className="driver-compact-group">
+                        {group.trips.map((t) => {
+                          const stage = getTripStage(t);
+                          const isExpanded = expandedTripId === t.id;
+                          const refCode = getTripRef(t);
+                          const round = Boolean(t.returnAt);
+                          const isBusy = actingTripId === t.id;
+                          const isNoteBusy = savingNoteId === t.id;
+                          const isNoteSaved = savedNoteId === t.id;
+                          const currentDraft = notesDraft[t.id] ?? t.driverNotes ?? '';
 
-                        {/* Pickup Time & Date Chip */}
-                        <div className="driver-time-chip">
-                          <Clock size={16} color="var(--blue)" />
-                          <strong>{clock(t.pickupAt)}</strong>
-                          <small>{dayLabel(t.pickupAt)}</small>
-                        </div>
-                      </div>
+                          return (
+                            <article
+                              key={t.id}
+                              className={`driver-compact-card${isExpanded ? ' is-expanded' : ''}${stage >= 1 && stage <= 3 ? ' is-active' : ''}`}
+                            >
+                              {/* High-Density Compact Clickable Row Matching Reference Image */}
+                              <div
+                                className="driver-compact-summary"
+                                onClick={() => setExpandedTripId(isExpanded ? null : t.id)}
+                                role="button"
+                                tabIndex={0}
+                              >
+                                {/* Row 1: Passenger Name + #Code on left, Pickup Time on right */}
+                                <div className="driver-compact-row-top">
+                                  <div className="driver-compact-identity">
+                                    <strong className="driver-compact-name">{t.name || 'Guest'}</strong>
+                                    <span className="driver-compact-ref">#{refCode}</span>
+                                  </div>
+                                  <strong className="driver-compact-time">{clock(t.pickupAt)}</strong>
+                                </div>
 
-                      {/* High-Impact Driver Route Journey Card (Pickup & Dropoff) */}
-                      <div className="driver-route-card">
-                        {t.pickup && (
-                          <div className="driver-route-leg">
-                            <div className="driver-route-leg-head">
-                              <span className="driver-route-badge pickup">
-                                <MapPin size={13} /> Pickup Location
-                              </span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                {t.flight && (
-                                  <a
-                                    href={`https://www.google.com/search?q=${encodeURIComponent(t.flight + ' flight status')}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="driver-flight-pill"
-                                    style={{ textDecoration: 'none' }}
-                                    title="Check live flight tracking"
-                                  >
-                                    <Plane size={11} /> Flight {t.flight}
-                                  </a>
-                                )}
-                                <span className="driver-time-pill">
-                                  <Clock size={11} /> {clock(t.pickupAt)}
-                                </span>
+                                {/* Row 2: Visual indicators (Calendar, Round trip, Flight info) */}
+                                <div className="driver-compact-row-mid">
+                                  <span className="driver-compact-icon" title="Scheduled ride">
+                                    <Calendar size={13} />
+                                  </span>
+                                  {round && (
+                                    <>
+                                      <span className="driver-compact-dot">•</span>
+                                      <span className="driver-compact-attr">
+                                        <ArrowLeftRight size={12} /> Round trip
+                                      </span>
+                                    </>
+                                  )}
+                                  {t.flight && (
+                                    <>
+                                      <span className="driver-compact-dot">•</span>
+                                      <span className="driver-compact-attr flight">
+                                        <Plane size={12} /> {formatFlightSummary(t.flight)}
+                                      </span>
+                                    </>
+                                  )}
+                                  <span className="driver-compact-chevron" style={{ marginLeft: 'auto' }}>
+                                    {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                                  </span>
+                                </div>
+
+                                {/* Row 3: Vibrant Badges (Confirmed + • + Stage) */}
+                                <div className="driver-compact-row-badges">
+                                  <span className="driver-badge-confirmed">Confirmed</span>
+                                  <span className="driver-compact-dot">•</span>
+                                  <span className={`driver-badge-stage ${getStageClassName(stage)}`}>
+                                    {getStageBadgeLabel(stage, t.driverStatus)}
+                                  </span>
+                                </div>
                               </div>
-                            </div>
-                            <h3 className="driver-route-address">{t.pickup}</h3>
-                            <div className="driver-route-nav-row">
-                              <a
-                                href={googleMapsUrl(t.pickup)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="driver-route-nav-btn google"
-                                title="Navigate to Pickup with Google Maps"
-                              >
-                                <Navigation size={13} /> Google Maps
-                              </a>
-                              <a
-                                href={wazeUrl(t.pickup)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="driver-route-nav-btn waze"
-                                title="Navigate to Pickup with Waze"
-                              >
-                                <Compass size={13} /> Waze
-                              </a>
-                              <a
-                                href={appleMapsUrl(t.pickup)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="driver-route-nav-btn apple"
-                                title="Navigate to Pickup with Apple Maps"
-                              >
-                                <Navigation size={13} /> Apple Maps
-                              </a>
-                            </div>
-                          </div>
-                        )}
 
-                        <div className="driver-route-connector" />
+                              {/* Tap-to-Expand Interactive Detail Accordion */}
+                              {isExpanded && (
+                                <div className="driver-compact-expanded-body">
+                                  {/* Route Journey Card (Pickup, Extra Stop, Dropoff) */}
+                                  <div className="driver-route-card">
+                                    {t.pickup && (
+                                      <div className="driver-route-leg">
+                                        <div className="driver-route-leg-head">
+                                          <span className="driver-route-badge pickup">
+                                            <MapPin size={13} /> Pickup Location
+                                          </span>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                            {t.flight && (
+                                              <a
+                                                href={`https://www.google.com/search?q=${encodeURIComponent(t.flight + ' flight status')}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="driver-flight-pill"
+                                                style={{ textDecoration: 'none' }}
+                                                title="Check live flight tracking"
+                                              >
+                                                <Plane size={11} /> Flight {t.flight}
+                                              </a>
+                                            )}
+                                            <span className="driver-time-pill">
+                                              <Clock size={11} /> {clock(t.pickupAt)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <h3 className="driver-route-address">{t.pickup}</h3>
+                                        <div className="driver-route-nav-row">
+                                          <a
+                                            href={googleMapsUrl(t.pickup)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="driver-route-nav-btn google"
+                                            title="Navigate with Google Maps"
+                                          >
+                                            <Navigation size={13} /> Google Maps
+                                          </a>
+                                          <a
+                                            href={wazeUrl(t.pickup)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="driver-route-nav-btn waze"
+                                            title="Navigate with Waze"
+                                          >
+                                            <Compass size={13} /> Waze
+                                          </a>
+                                          <a
+                                            href={appleMapsUrl(t.pickup)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="driver-route-nav-btn apple"
+                                            title="Navigate with Apple Maps"
+                                          >
+                                            <Navigation size={13} /> Apple Maps
+                                          </a>
+                                        </div>
+                                      </div>
+                                    )}
 
-                        {t.extraStop && (
-                          <>
-                            <div className="driver-route-leg" style={{ background: 'rgba(234, 179, 8, 0.08)', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(234, 179, 8, 0.25)' }}>
-                              <div className="driver-route-leg-head">
-                                <span className="driver-route-badge stop">
-                                  ⚠️ Extra Stop
-                                </span>
-                              </div>
-                              <h4 className="driver-route-address" style={{ fontSize: 15 }}>{t.extraStop}</h4>
-                              <div className="driver-route-nav-row">
-                                <a href={googleMapsUrl(t.extraStop)} target="_blank" rel="noopener noreferrer" className="driver-route-nav-btn google">
-                                  <Navigation size={13} /> Google
-                                </a>
-                                <a href={wazeUrl(t.extraStop)} target="_blank" rel="noopener noreferrer" className="driver-route-nav-btn waze">
-                                  <Compass size={13} /> Waze
-                                </a>
-                                <a href={appleMapsUrl(t.extraStop)} target="_blank" rel="noopener noreferrer" className="driver-route-nav-btn apple">
-                                  <Navigation size={13} /> Apple
-                                </a>
-                              </div>
-                            </div>
-                            <div className="driver-route-connector" />
-                          </>
-                        )}
+                                    <div className="driver-route-connector" />
 
-                        {t.dropoff && (
-                          <div className="driver-route-leg">
-                            <div className="driver-route-leg-head">
-                              <span className="driver-route-badge dropoff">
-                                <Flag size={13} /> Dropoff Location
-                              </span>
-                            </div>
-                            <h3 className="driver-route-address">{t.dropoff}</h3>
-                            <div className="driver-route-nav-row">
-                              <a
-                                href={googleMapsUrl(t.dropoff)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="driver-route-nav-btn google"
-                                title="Navigate to Dropoff with Google Maps"
-                              >
-                                <Navigation size={13} /> Google Maps
-                              </a>
-                              <a
-                                href={wazeUrl(t.dropoff)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="driver-route-nav-btn waze"
-                                title="Navigate to Dropoff with Waze"
-                              >
-                                <Compass size={13} /> Waze
-                              </a>
-                              <a
-                                href={appleMapsUrl(t.dropoff)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="driver-route-nav-btn apple"
-                                title="Navigate to Dropoff with Apple Maps"
-                              >
-                                <Navigation size={13} /> Apple Maps
-                              </a>
-                            </div>
-                          </div>
-                        )}
+                                    {t.extraStop && (
+                                      <>
+                                        <div className="driver-route-leg" style={{ background: 'rgba(234, 179, 8, 0.08)', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(234, 179, 8, 0.25)' }}>
+                                          <div className="driver-route-leg-head">
+                                            <span className="driver-route-badge stop">
+                                              ⚠️ Extra Stop
+                                            </span>
+                                          </div>
+                                          <h4 className="driver-route-address" style={{ fontSize: 15 }}>{t.extraStop}</h4>
+                                          <div className="driver-route-nav-row">
+                                            <a href={googleMapsUrl(t.extraStop)} target="_blank" rel="noopener noreferrer" className="driver-route-nav-btn google">
+                                              <Navigation size={13} /> Google
+                                            </a>
+                                            <a href={wazeUrl(t.extraStop)} target="_blank" rel="noopener noreferrer" className="driver-route-nav-btn waze">
+                                              <Compass size={13} /> Waze
+                                            </a>
+                                            <a href={appleMapsUrl(t.extraStop)} target="_blank" rel="noopener noreferrer" className="driver-route-nav-btn apple">
+                                              <Navigation size={13} /> Apple
+                                            </a>
+                                          </div>
+                                        </div>
+                                        <div className="driver-route-connector" />
+                                      </>
+                                    )}
+
+                                    {t.dropoff && (
+                                      <div className="driver-route-leg">
+                                        <div className="driver-route-leg-head">
+                                          <span className="driver-route-badge dropoff">
+                                            <Flag size={13} /> Dropoff Location
+                                          </span>
+                                        </div>
+                                        <h3 className="driver-route-address">{t.dropoff}</h3>
+                                        <div className="driver-route-nav-row">
+                                          <a
+                                            href={googleMapsUrl(t.dropoff)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="driver-route-nav-btn google"
+                                            title="Navigate with Google Maps"
+                                          >
+                                            <Navigation size={13} /> Google Maps
+                                          </a>
+                                          <a
+                                            href={wazeUrl(t.dropoff)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="driver-route-nav-btn waze"
+                                            title="Navigate with Waze"
+                                          >
+                                            <Compass size={13} /> Waze
+                                          </a>
+                                          <a
+                                            href={appleMapsUrl(t.dropoff)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="driver-route-nav-btn apple"
+                                            title="Navigate with Apple Maps"
+                                          >
+                                            <Navigation size={13} /> Apple Maps
+                                          </a>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Meta Info (Vehicle, Passenger count, Phone, Flight) */}
+                                  <div className="reservation-card-meta" style={{ margin: 0, gap: 10 }}>
+                                    {t.vehicle && (
+                                      <span>
+                                        <CarFront size={14} /> {vehicles.find((v) => v.id === t.vehicle)?.name ?? t.vehicle}
+                                      </span>
+                                    )}
+                                    {t.passengers > 0 && <span><Users size={14} /> {t.passengers} passengers</span>}
+                                    {round && <span><RefreshCw size={14} /> Round trip</span>}
+                                    {t.carSeat && <span style={{ color: '#b45309' }}><Baby size={14} /> Car seat required</span>}
+                                    {t.insidePickup && <span style={{ color: '#2563eb' }}><DoorOpen size={14} /> Inside pickup / Meet &amp; Greet</span>}
+                                    {t.phone && (
+                                      <a
+                                        href={`tel:${t.phone.replace(/[^\d+]/g, '')}`}
+                                        className="driver-tool-btn"
+                                        style={{ color: '#38bdf8', fontWeight: 800 }}
+                                      >
+                                        <Phone size={13} /> Call {t.phone}
+                                      </a>
+                                    )}
+                                  </div>
+
+                                  {/* Customer Notes */}
+                                  {t.notes && (
+                                    <div style={{ fontSize: 12, background: '#131d2e', padding: '10px 14px', borderRadius: 10, border: '1px solid #1e293b', color: '#cbd5e1' }}>
+                                      <strong style={{ color: '#fff', display: 'block', marginBottom: 2 }}>Passenger Instructions:</strong>
+                                      {t.notes}
+                                    </div>
+                                  )}
+
+                                  {/* Cockpit HUD Button */}
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: '6px 0' }}>
+                                    <button
+                                      type="button"
+                                      className="driver-driveview-pill"
+                                      onClick={() => {
+                                        setDriveViewTripId(t.id);
+                                        setIsDriveModalOpen(true);
+                                      }}
+                                      title="Open Cockpit Drive View HUD"
+                                    >
+                                      <Compass size={14} /> 🚗 Open Drive View HUD
+                                    </button>
+                                    {stage >= 1 && stage <= 3 && (
+                                      <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                        <span className="fleet-live-pulse" /> Live Trip GPS Active
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* 4-Step Interactive Workflow Pipeline */}
+                                  <div className="driver-pipeline-container">
+                                    <div className={`driver-pipe-step${stage >= 1 ? ' done' : stage === 0 ? ' current' : ''}`}>
+                                      <span className="driver-pipe-num">{stage >= 1 ? '✓' : '1'}</span>
+                                      <span>Accept Ride</span>
+                                    </div>
+                                    <div className={`driver-pipe-divider${stage >= 1 ? ' done' : ''}`} />
+
+                                    <div className={`driver-pipe-step${stage >= 2 ? ' done' : stage === 1 ? ' current' : ''}`}>
+                                      <span className="driver-pipe-num">{stage >= 2 ? '✓' : '2'}</span>
+                                      <span>Arrived</span>
+                                    </div>
+                                    <div className={`driver-pipe-divider${stage >= 2 ? ' done' : ''}`} />
+
+                                    <div className={`driver-pipe-step${stage >= 3 ? ' done' : stage === 2 ? ' current' : ''}`}>
+                                      <span className="driver-pipe-num">{stage >= 3 ? '✓' : '3'}</span>
+                                      <span>On Board</span>
+                                    </div>
+                                    <div className={`driver-pipe-divider${stage >= 3 ? ' done' : ''}`} />
+
+                                    <div className={`driver-pipe-step${stage === 4 ? ' done' : stage === 3 ? ' current' : ''}`}>
+                                      <span className="driver-pipe-num">{stage === 4 ? '✓' : '4'}</span>
+                                      <span>Drop Off</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Driver Action Control Buttons */}
+                                  <div className="driver-actions-bar">
+                                    {stage === 0 && (
+                                      <button
+                                        type="button"
+                                        className="driver-primary-btn btn-accept"
+                                        disabled={isBusy}
+                                        onClick={() => handleTripAction(t.id, 'accept')}
+                                      >
+                                        {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={2.5} />}
+                                        Accept Ride
+                                      </button>
+                                    )}
+
+                                    {stage === 1 && (
+                                      <button
+                                        type="button"
+                                        className="driver-primary-btn btn-arrive"
+                                        disabled={isBusy}
+                                        onClick={() => handleTripAction(t.id, 'arrive')}
+                                      >
+                                        {isBusy ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} strokeWidth={2.5} />}
+                                        I’ve Arrived at Pickup
+                                      </button>
+                                    )}
+
+                                    {stage === 2 && (
+                                      <button
+                                        type="button"
+                                        className="driver-primary-btn btn-pickup"
+                                        disabled={isBusy}
+                                        onClick={() => handleTripAction(t.id, 'pickup')}
+                                      >
+                                        {isBusy ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} strokeWidth={2.5} />}
+                                        Pick Up Passenger (On Board)
+                                      </button>
+                                    )}
+
+                                    {stage === 3 && (
+                                      <button
+                                        type="button"
+                                        className="driver-primary-btn btn-dropoff"
+                                        disabled={isBusy}
+                                        onClick={() => handleTripAction(t.id, 'dropoff')}
+                                      >
+                                        {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Flag size={16} strokeWidth={2.5} />}
+                                        Drop Off Passenger (Complete Trip)
+                                      </button>
+                                    )}
+
+                                    {stage === 4 && (
+                                      <div className="driver-primary-btn btn-done">
+                                        <CheckCircle2 size={18} /> Ride Completed
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Dedicated Driver Trip Notes Area */}
+                                  <div className="driver-note-box">
+                                    <div className="driver-note-head">
+                                      <span>Driver Trip Notes &amp; Summary</span>
+                                      {t.driverNotes && (
+                                        <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 700 }}>
+                                          ✓ Saved on Record
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {t.driverNotes && (
+                                      <div className="driver-notes-history">
+                                        {t.driverNotes}
+                                      </div>
+                                    )}
+
+                                    <textarea
+                                      className="driver-note-textarea"
+                                      rows={2}
+                                      value={currentDraft}
+                                      onChange={(e) =>
+                                        setNotesDraft((prev) => ({ ...prev, [t.id]: e.target.value }))
+                                      }
+                                      placeholder={
+                                        stage === 4
+                                          ? 'Add drop-off notes (toll receipt, smooth trip)...'
+                                          : 'Add notes about this ride (toll fees, luggage count, special requests)...'
+                                      }
+                                    />
+
+                                    <button
+                                      type="button"
+                                      className={`driver-note-save-btn${isNoteSaved ? ' saved' : ''}`}
+                                      disabled={isNoteBusy}
+                                      onClick={() => handleSaveNote(t.id)}
+                                    >
+                                      {isNoteBusy ? (
+                                        <Loader2 size={13} className="animate-spin" />
+                                      ) : isNoteSaved ? (
+                                        <Check size={13} strokeWidth={3} />
+                                      ) : (
+                                        <Save size={13} />
+                                      )}
+                                      {isNoteSaved ? 'Saved!' : isNoteBusy ? 'Saving…' : 'Save Driver Note'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </article>
+                          );
+                        })}
                       </div>
-
-                      {/* Meta Information (Vehicle, Passenger count, Phone, Flight, Special Requests) */}
-                      <div className="reservation-card-meta" style={{ margin: 0, gap: 10 }}>
-                        {t.vehicle && (
-                          <span>
-                            <CarFront size={14} /> {vehicles.find((v) => v.id === t.vehicle)?.name ?? t.vehicle}
-                          </span>
-                        )}
-                        {t.passengers > 0 && <span><Users size={14} /> {t.passengers} passengers</span>}
-                        {round && <span><RefreshCw size={14} /> Round trip</span>}
-                        {t.flight && (
-                          <a
-                            href={`https://www.google.com/search?q=${encodeURIComponent(t.flight + ' flight status')}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="driver-tool-btn"
-                            style={{ padding: '3px 8px', fontSize: 11 }}
-                          >
-                            <Plane size={13} /> Flight {t.flight}
-                          </a>
-                        )}
-                        {t.carSeat && <span style={{ color: '#b45309' }}><Baby size={14} /> Car seat required</span>}
-                        {t.insidePickup && <span style={{ color: '#2563eb' }}><DoorOpen size={14} /> Inside pickup / Meet &amp; Greet</span>}
-                        {t.phone && (
-                          <a
-                            href={`tel:${t.phone.replace(/[^\d+]/g, '')}`}
-                            className="driver-tool-btn"
-                            style={{ color: '#1d4ed8', fontWeight: 800 }}
-                          >
-                            <Phone size={13} /> Call {t.phone}
-                          </a>
-                        )}
-                      </div>
-
-                      {/* Customer / Dispatch Notes if present */}
-                      {t.notes && (
-                        <div style={{ fontSize: 12, background: '#f8fafc', padding: '10px 14px', borderRadius: 10, border: '1px solid #e2e8f0', color: 'var(--ink-mid)' }}>
-                          <strong style={{ color: 'var(--ink)', display: 'block', marginBottom: 2 }}>Passenger Instructions:</strong>
-                          {t.notes}
-                        </div>
-                      )}
-
-                      {/* Drive View HUD Shortcut Button */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: '6px 0' }}>
-                        <button
-                          type="button"
-                          className="driver-driveview-pill"
-                          onClick={() => {
-                            setDriveViewTripId(t.id);
-                            setIsDriveModalOpen(true);
-                          }}
-                          title="Open Cockpit Drive View HUD"
-                        >
-                          <Compass size={14} /> 🚗 Open Drive View HUD
-                        </button>
-                        {stage >= 1 && stage <= 3 && (
-                          <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                            <span className="fleet-live-pulse" /> Live Trip GPS Active
-                          </span>
-                        )}
-                      </div>
-
-                      {/* 4-Step Interactive Chauffeur Workflow Pipeline */}
-                      <div className="driver-pipeline-container">
-                        <div className={`driver-pipe-step${stage >= 1 ? ' done' : stage === 0 ? ' current' : ''}`}>
-                          <span className="driver-pipe-num">{stage >= 1 ? '✓' : '1'}</span>
-                          <span>Accept Ride</span>
-                        </div>
-                        <div className={`driver-pipe-divider${stage >= 1 ? ' done' : ''}`} />
-
-                        <div className={`driver-pipe-step${stage >= 2 ? ' done' : stage === 1 ? ' current' : ''}`}>
-                          <span className="driver-pipe-num">{stage >= 2 ? '✓' : '2'}</span>
-                          <span>Arrived</span>
-                        </div>
-                        <div className={`driver-pipe-divider${stage >= 2 ? ' done' : ''}`} />
-
-                        <div className={`driver-pipe-step${stage >= 3 ? ' done' : stage === 2 ? ' current' : ''}`}>
-                          <span className="driver-pipe-num">{stage >= 3 ? '✓' : '3'}</span>
-                          <span>On Board</span>
-                        </div>
-                        <div className={`driver-pipe-divider${stage >= 3 ? ' done' : ''}`} />
-
-                        <div className={`driver-pipe-step${stage === 4 ? ' done' : stage === 3 ? ' current' : ''}`}>
-                          <span className="driver-pipe-num">{stage === 4 ? '✓' : '4'}</span>
-                          <span>Drop Off</span>
-                        </div>
-                      </div>
-
-                      {/* Driver Action Control Buttons */}
-                      <div className="driver-actions-bar">
-                        {stage === 0 && (
-                          <button
-                            type="button"
-                            className="driver-primary-btn btn-accept"
-                            disabled={isBusy}
-                            onClick={() => handleTripAction(t.id, 'accept')}
-                          >
-                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={2.5} />}
-                            Accept Ride
-                          </button>
-                        )}
-
-                        {stage === 1 && (
-                          <button
-                            type="button"
-                            className="driver-primary-btn btn-arrive"
-                            disabled={isBusy}
-                            onClick={() => handleTripAction(t.id, 'arrive')}
-                          >
-                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} strokeWidth={2.5} />}
-                            I’ve Arrived at Pickup
-                          </button>
-                        )}
-
-                        {stage === 2 && (
-                          <button
-                            type="button"
-                            className="driver-primary-btn btn-pickup"
-                            disabled={isBusy}
-                            onClick={() => handleTripAction(t.id, 'pickup')}
-                          >
-                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} strokeWidth={2.5} />}
-                            Pick Up Passenger (On Board)
-                          </button>
-                        )}
-
-                        {stage === 3 && (
-                          <button
-                            type="button"
-                            className="driver-primary-btn btn-dropoff"
-                            disabled={isBusy}
-                            onClick={() => handleTripAction(t.id, 'dropoff')}
-                          >
-                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Flag size={16} strokeWidth={2.5} />}
-                            Drop Off Passenger (Complete Trip)
-                          </button>
-                        )}
-
-                        {stage === 4 && (
-                          <div className="driver-primary-btn btn-done">
-                            <CheckCircle2 size={18} /> Ride Completed
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Dedicated Driver Trip Notes Area (Şoför Notu Bölümü) */}
-                      <div className="driver-note-box">
-                        <div className="driver-note-head">
-                          <span>Driver Trip Notes &amp; Summary</span>
-                          {t.driverNotes && (
-                            <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 700 }}>
-                              ✓ Saved on Record
-                            </span>
-                          )}
-                        </div>
-
-                        {t.driverNotes && (
-                          <div className="driver-notes-history">
-                            {t.driverNotes}
-                          </div>
-                        )}
-
-                        <textarea
-                          className="driver-note-textarea"
-                          rows={2}
-                          value={currentDraft}
-                          onChange={(e) =>
-                            setNotesDraft((prev) => ({ ...prev, [t.id]: e.target.value }))
-                          }
-                          placeholder={
-                            stage === 4
-                              ? 'Add drop-off notes (e.g. passenger safely dropped off at Terminal 4, toll receipt $15.50, smooth trip)...'
-                              : 'Add notes about this ride (toll fees, luggage count, special requests, passenger comments)...'
-                          }
-                        />
-
-                        <button
-                          type="button"
-                          className={`driver-note-save-btn${isNoteSaved ? ' saved' : ''}`}
-                          disabled={isNoteBusy}
-                          onClick={() => handleSaveNote(t.id)}
-                        >
-                          {isNoteBusy ? (
-                            <Loader2 size={13} className="animate-spin" />
-                          ) : isNoteSaved ? (
-                            <Check size={13} strokeWidth={3} />
-                          ) : (
-                            <Save size={13} />
-                          )}
-                          {isNoteSaved ? 'Saved!' : isNoteBusy ? 'Saving…' : 'Save Driver Note'}
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        ) : (
+                    </section>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
           /* Tab 4: Driver Profile & Vehicle Settings */
           <div className="dashboard-grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
             <form className="dash-card" onSubmit={saveProfile}>

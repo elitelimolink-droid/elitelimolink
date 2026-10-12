@@ -1506,40 +1506,97 @@ html.dark .driver-active-filter-pill { background: #1e293b; color: #38bdf8; bord
 
 .driver-app-container { width: 100%; max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; flex: 1; background: #080d1a; min-height: 100dvh; box-shadow: 0 0 50px rgba(0,0,0,0.8); border-left: 1px solid #111827; border-right: 1px solid #111827; }
 
-/* App Top Header */
-.driver-app-header { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: #090e1c; border-bottom: 1px solid #1e293b; gap: 12px; }
+/* App Top Header Matching Reference Screenshot */
+.driver-dashboard-header { position: sticky; top: 0; z-index: 45; display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: #060a14; border-bottom: 1px solid #1a263d; gap: 12px; }
 
-.driver-app-menu-btn { background: #131d31; border: 1px solid #1e293b; cursor: pointer; color: #38bdf8; padding: 7px; margin-left: -4px; display: grid; place-items: center; border-radius: 9px; transition: all .15s ease; }
-.driver-app-menu-btn:hover { background: #1e2b45; color: #7dd3fc; border-color: #38bdf8; }
+.driver-header-icon-btn { background: transparent; border: 0; cursor: pointer; color: #ffffff; padding: 6px; display: grid; place-items: center; border-radius: 8px; transition: all .15s ease; }
+.driver-header-icon-btn:hover { color: #38bdf8; background: #131d31; }
+.driver-header-icon-btn.active { color: #38bdf8; background: #1e2b45; }
 
-.driver-app-title { font-size: 21px; font-weight: 800; color: #ffffff; margin: 0; flex: 1; letter-spacing: -0.02em; }
+.driver-dashboard-title { font-size: 21px; font-weight: 800; color: #ffffff; margin: 0; flex: 1; letter-spacing: -0.02em; }
+.driver-dashboard-actions { display: flex; align-items: center; gap: 4px; }
+.driver-bell-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 2px #060a14; }
 
-.driver-app-header-right { display: flex; align-items: center; gap: 8px; }
+/* Sub-header Filter Bar Matching Reference Screenshot ("Next 30 days, oldest trip date first") */
+.driver-filter-subbar { position: sticky; top: 56px; z-index: 40; background: #070c18; border-bottom: 1px solid #1a263d; padding: 0; }
+.driver-filter-subbar-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 11px 18px; background: transparent; border: 0; cursor: pointer; text-align: left; transition: background .15s ease; }
+.driver-filter-subbar-btn:hover { background: #0d1527; }
+.driver-filter-text { font-size: 14px; font-weight: 700; color: #ffffff; letter-spacing: -0.01em; }
+.driver-funnel-icon { color: #94a3b8; display: grid; place-items: center; transition: color .15s ease; }
+.driver-filter-subbar-btn:hover .driver-funnel-icon { color: #38bdf8; }
 
-/* App Two-Tab Bar (UPCOMING / PAST) */
-.driver-app-tabs { position: sticky; top: 57px; z-index: 39; display: flex; background: #090e1c; border-bottom: 2px solid #1e293b; }
+/* Filter Dropdown Modal / Popover */
+.driver-filter-dropdown { position: absolute; top: 104px; left: 16px; right: 16px; background: #0d1527; border: 1px solid #25334d; border-radius: 14px; box-shadow: 0 16px 36px rgba(0,0,0,0.6); padding: 14px; z-index: 50; display: flex; flex-direction: column; gap: 12px; animation: addonReveal 0.15s ease-out; }
+.driver-filter-dropdown-head { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: .06em; padding-bottom: 6px; border-bottom: 1px solid #1e293b; }
+.driver-filter-dropdown-head button { background: transparent; border: 0; color: #94a3b8; cursor: pointer; display: grid; place-items: center; padding: 2px; }
+.driver-filter-dropdown-head button:hover { color: #fff; }
+.driver-filter-options { display: flex; flex-direction: column; gap: 5px; }
+.driver-filter-opt { width: 100%; text-align: left; padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: #cbd5e1; background: transparent; border: 0; cursor: pointer; transition: all .15s ease; }
+.driver-filter-opt:hover { background: #162238; color: #fff; }
+.driver-filter-opt.active { background: #1d3b65; color: #38bdf8; font-weight: 800; }
+.driver-filter-sort-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 10px; border-top: 1px solid #1e293b; }
+.driver-sort-pill { font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 6px; background: #162238; color: #94a3b8; border: 1px solid #25334d; cursor: pointer; transition: all .15s ease; }
+.driver-sort-pill:hover { color: #fff; border-color: #38bdf8; }
+.driver-sort-pill.active { background: #2563eb; color: #fff; border-color: #3b82f6; }
 
-.driver-app-tab { flex: 1; text-align: center; padding: 13px 8px; font-size: 13.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; background: transparent; border: 0; cursor: pointer; color: #94a3b8; border-bottom: 3px solid transparent; transition: all .15s ease; }
-.driver-app-tab:hover { color: #38bdf8; }
-.driver-app-tab.active { color: #38bdf8; border-bottom-color: #38bdf8; text-shadow: 0 0 14px rgba(56, 189, 248, 0.4); font-weight: 900; }
+/* Inline Search Bar */
+.driver-inline-searchbar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: #0d1527; border-bottom: 1px solid #1a263d; }
+.driver-inline-searchbar input { flex: 1; background: #131d31; border: 1px solid #25334d; border-radius: 8px; color: #fff; font-size: 13px; padding: 7px 12px; outline: none; }
+.driver-inline-searchbar input:focus { border-color: #38bdf8; }
+.driver-inline-searchbar button { background: transparent; border: 0; color: #94a3b8; cursor: pointer; display: grid; place-items: center; padding: 4px; }
+
+/* Notifications Box */
+.driver-notifications-box { margin: 12px 16px 0; padding: 12px 14px; background: #0d1527; border: 1px solid #25334d; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
 
 /* App Content Area */
-.driver-app-body { flex: 1; padding: 18px 16px 40px; display: flex; flex-direction: column; background: #080d1a; color: #ffffff; }
+.driver-app-body { flex: 1; padding: 14px 16px 40px; display: flex; flex-direction: column; background: #080d1a; color: #ffffff; }
 
-/* Native App Empty State Illustration & Typography */
-.driver-app-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; margin: auto 0; padding: 50px 20px 70px; }
-.driver-empty-illustration { margin-bottom: 24px; }
-.driver-empty-title { font-size: 22px; font-weight: 800; color: #ffffff; margin: 0 0 8px; letter-spacing: -0.01em; }
-.driver-empty-desc { font-size: 14px; color: #94a3b8; margin: 0; line-height: 1.5; max-width: 320px; }
+/* Date Section Headers (Matching Reference: "Friday, October 23rd", "Sunday, October 25th", etc.) */
+.driver-dashboard-list { display: flex; flex-direction: column; gap: 8px; }
+.driver-date-section { margin-bottom: 12px; }
+.driver-date-header { font-size: 16.5px; font-weight: 800; color: #ffffff; margin: 12px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid #1a263d; letter-spacing: -0.01em; }
 
-/* In-App Trip Mission Card */
-.driver-app-card { background: #0f172a; border: 1px solid #1e293b; border-radius: 18px; padding: 16px 18px; margin-bottom: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 14px; transition: transform .15s ease, box-shadow .15s ease; }
-.driver-app-card.active-mission { border-color: #2563eb; box-shadow: 0 0 25px rgba(37,99,235,0.25); }
+/* High-Density Compact Trip Group */
+.driver-compact-group { display: flex; flex-direction: column; gap: 10px; }
+
+/* High-Density Compact Card (Matching Screenshot Details) */
+.driver-compact-card { background: #0c1424; border: 1px solid #1c2a42; border-left: 3.5px solid #22c55e; border-radius: 11px; overflow: hidden; transition: all .15s ease; box-shadow: 0 4px 14px rgba(0,0,0,0.3); }
+.driver-compact-card:hover { border-color: #2c3f60; background: #101a2f; transform: translateY(-1px); }
+.driver-compact-card.is-active { border-left-color: #38bdf8; box-shadow: 0 4px 20px rgba(56, 189, 248, 0.2); }
+.driver-compact-card.is-expanded { border-color: #2563eb; background: #0e1729; }
+
+/* Compact Clickable Summary Row */
+.driver-compact-summary { padding: 11px 14px; display: flex; flex-direction: column; gap: 5px; cursor: pointer; user-select: none; }
+.driver-compact-row-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.driver-compact-identity { display: flex; align-items: baseline; gap: 6px; min-width: 0; flex: 1; }
+.driver-compact-name { font-size: 16px; font-weight: 800; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.driver-compact-ref { font-size: 14px; font-weight: 600; color: #94a3b8; flex: none; }
+.driver-compact-time { font-size: 15.5px; font-weight: 800; color: #ffffff; flex: none; text-align: right; }
+
+/* Mid row: calendar icon, round trip, flight tracking */
+.driver-compact-row-mid { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #94a3b8; }
+.driver-compact-icon { color: #94a3b8; display: grid; place-items: center; flex: none; }
+.driver-compact-dot { color: #64748b; font-weight: bold; flex: none; }
+.driver-compact-attr { display: inline-flex; align-items: center; gap: 4px; color: #cbd5e1; font-weight: 600; font-size: 12px; }
+.driver-compact-attr.flight { color: #38bdf8; font-weight: 700; }
+.driver-compact-chevron { color: #64748b; display: grid; place-items: center; flex: none; }
+
+/* Badges row: Confirmed green pill + dot + stage */
+.driver-compact-row-badges { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.driver-badge-confirmed { background: #22c55e; color: #022c22; font-size: 11.5px; font-weight: 800; padding: 2.5px 8.5px; border-radius: 6px; letter-spacing: 0.01em; display: inline-block; }
+.driver-badge-stage { background: #334155; color: #e2e8f0; font-size: 11.5px; font-weight: 700; padding: 2.5px 8.5px; border-radius: 6px; display: inline-block; }
+.driver-badge-stage.enroute { background: #2563eb; color: #ffffff; }
+.driver-badge-stage.arrived { background: #d97706; color: #ffffff; }
+.driver-badge-stage.onboard { background: #9333ea; color: #ffffff; }
+.driver-badge-stage.completed { background: #15803d; color: #ffffff; }
+
+/* Expanded Detailed Accordion Panel */
+.driver-compact-expanded-body { border-top: 1px solid #1c2a42; padding: 14px; background: #080d1a; display: flex; flex-direction: column; gap: 12px; animation: addonReveal 0.2s ease-out; }
 
 /* Route Card in Dark Mode - Crisp Typography & Vibrant Leg Badges */
-.driver-app-card .driver-route-card { background: #131d2e; border-color: #1e293b; box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
-.driver-app-card .driver-route-address { color: #ffffff; font-weight: 800; font-size: 18px; }
-.driver-app-card .driver-route-connector::before { background: repeating-linear-gradient(to bottom, #38bdf8 0, #38bdf8 4px, transparent 4px, transparent 8px); }
+.driver-route-card { background: #0f182b; border: 1px solid #1e293b; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+.driver-route-address { color: #ffffff; font-weight: 800; font-size: 17px; margin: 0; line-height: 1.35; word-break: break-word; }
+.driver-route-connector::before { background: repeating-linear-gradient(to bottom, #38bdf8 0, #38bdf8 4px, transparent 4px, transparent 8px); }
 
 /* Colorful Drawer Menu Items */
 .driver-drivemenu-link.btn-upcoming { background: #131d31; color: #818cf8; border: 1px solid #3730a3; }
@@ -1552,6 +1609,13 @@ html.dark .driver-active-filter-pill { background: #1e293b; color: #38bdf8; bord
 .driver-drivemenu-link.btn-settings:hover { background: #451a03; color: #fde047; }
 .driver-drivemenu-link.btn-dispatch { background: #b45309; color: #ffffff; font-weight: 800; }
 .driver-drivemenu-link.btn-signout { background: #991b1b; color: #ffffff; font-weight: 800; }
+
+/* Empty state */
+.driver-app-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; margin: auto 0; padding: 50px 20px 70px; }
+.driver-empty-illustration { margin-bottom: 24px; }
+.driver-empty-title { font-size: 22px; font-weight: 800; color: #ffffff; margin: 0 0 8px; letter-spacing: -0.01em; }
+.driver-empty-desc { font-size: 14px; color: #94a3b8; margin: 0; line-height: 1.5; max-width: 320px; }
+
 
 
 
