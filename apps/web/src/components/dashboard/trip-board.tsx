@@ -85,33 +85,64 @@ function formatFlightSummary(flight?: string) {
 
 const DEFAULT_DISPATCH_TRIPS: ReservationRecord[] = [
   {
-    id: 'trip_hdgcyj',
-    service: 'airport',
-    pickup: 'JFK International Airport, Terminal 4 Arrivals, Queens, NY 11430',
-    dropoff: 'The Plaza Hotel, 768 5th Ave, New York, NY 10019',
+    id: 'res_afxxhc',
+    service: 'ride',
+    pickup: 'Manhattan, New York, New York, United States',
+    dropoff: 'LGA — LaGuardia, New York, USA',
     extraStop: '',
-    pickupAt: '2026-10-23T09:45:00',
-    returnAt: '2026-10-25T11:45:00',
+    pickupAt: '2026-10-12T09:00:00',
+    returnAt: '',
     hours: 2,
-    vehicle: 'suv',
-    passengers: 2,
-    name: 'Ellen Rogers',
-    email: 'ellen.rogers@luxurytravel.com',
-    phone: '+1 (212) 555-0144',
-    flight: 'AA1140',
-    notes: 'Passenger has 2 large suitcases. Inside baggage claim greeting requested.',
+    vehicle: 'sedan',
+    passengers: 1,
+    name: 'BLACK CAR SERVICE. SUV 🦅',
+    email: 'limobjk@gmail.com',
+    phone: '+1 (347) 302-2271',
+    flight: '',
+    notes: 'Passenger requested inside pickup and child car seat.',
+    carSeat: true,
+    insidePickup: true,
+    status: 'completed',
+    driver: 'driver_ryan',
+    distanceMiles: 11.8,
+    estimatedFare: 146,
+    estimatedFareText: '$146.00',
+    pickupLocal: 'Mon, Oct 12, 9:00 AM',
+    returnLocal: '',
+    paid: false,
+    captured: false,
+    squareOrderId: '',
+    sourceName: 'ELITELIMOLINK',
+  } as unknown as ReservationRecord,
+  {
+    id: 'trip_4wxibp',
+    service: 'ride',
+    pickup: '21 Oak Hill Lane, East Hampton, New York, 11937',
+    dropoff: 'LGA — LaGuardia, New York, USA',
+    extraStop: '',
+    pickupAt: '2026-10-13T10:00:00',
+    returnAt: '',
+    hours: 2,
+    vehicle: 'sedan',
+    passengers: 1,
+    name: 'Ryan Scien',
+    email: 'limobjk@gmail.com',
+    phone: '+1 (555) 555-5555',
+    flight: 'DL0525',
+    notes: 'Flight DL0525.',
     carSeat: false,
     insidePickup: true,
     status: 'confirmed',
-    distanceMiles: 18.5,
-    estimatedFare: 185,
-    estimatedFareText: '$185.00',
-    pickupLocal: 'Fri Oct 23, 9:45 AM',
-    returnLocal: 'Sun Oct 25, 11:45 AM',
-    paid: true,
-    captured: true,
+    driver: 'driver_ryan',
+    distanceMiles: 96.3,
+    estimatedFare: 101.35,
+    estimatedFareText: '$101.35',
+    pickupLocal: 'Tue, Oct 13, 10:00 AM',
+    returnLocal: '',
+    paid: false,
+    captured: false,
     squareOrderId: '',
-    sourceName: 'ELITE LIMO LINK',
+    sourceName: 'ELITELIMOLINK',
   } as unknown as ReservationRecord,
   {
     id: 'trip_rz6zh7',
@@ -620,8 +651,11 @@ export function TripBoard({
 
   function driverName(id?: string) {
     if (!id) return '';
+    if (id === 'driver_ryan' || id === 'ryan') return 'Ryan Scien new';
+    if (id === 'j21l819oqoih8hf') return 'Hasan';
+    if (id === '43xxgsujwkilwvi') return 'Hande Bolat';
     const d = drivers.find((x) => x.id === id);
-    return d ? (d.name || d.email) : '';
+    return d ? (d.name || d.email) : id;
   }
 
   useEffect(() => {
@@ -787,45 +821,10 @@ export function TripBoard({
           <button type="button" className="trip-icon-btn" aria-label="Open menu" onClick={() => setMenuOpen(true)}>
             <Menu size={26} strokeWidth={2.25} />
           </button>
-          <div>
-            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.08em', color: '#2563eb', textTransform: 'uppercase', display: 'block', lineHeight: 1 }}>Elite Limo Link</span>
-            <h1 style={{ margin: 0, fontSize: 18, lineHeight: 1.2 }}>Dispatch Dashboard</h1>
-          </div>
+          <h1 style={{ margin: 0 }}>Dashboard</h1>
         </div>
         <div className="trip-top-actions">
-          <a
-            href="/driver"
-            className="trip-track-pill"
-            style={{
-              textDecoration: 'none',
-              fontSize: 12,
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '6px 12px',
-              borderRadius: 20,
-              background: '#eff6ff',
-              color: '#1d4ed8',
-              border: '1px solid #bfdbfe',
-            }}
-            title="Şoför Ekranına Geç (Driver Portal)"
-          >
-            🚗 Şoför Ekranı
-          </a>
           <ThemeToggle className="trip-icon-btn" label="Toggle day or night mode" />
-          <button
-            type="button"
-            className={`trip-icon-btn${panel === 'fleet' ? ' trip-icon-btn-active' : ''}`}
-            aria-label="Drive View & Fleet Map"
-            title="Drive View & Canlı Harita Takibi"
-            onClick={() => {
-              setFocusedFleetDriverId(undefined);
-              setPanel(panel === 'fleet' ? 'trips' : 'fleet');
-            }}
-          >
-            <Navigation size={22} strokeWidth={2} />
-          </button>
           <button
             type="button"
             className="trip-icon-btn"
@@ -1002,35 +1001,21 @@ export function TripBoard({
                                   {r.name || 'Unnamed guest'} <span>{shortRef(r.id)}</span>
                                 </p>
                                 {r.sourceName && <p className="trip-card-source">{r.sourceName}</p>}
-                                <p className="trip-card-meta">
-                                  <Calendar size={15} aria-label="Reservation Date" />
-                                  <span className="trip-dot">•</span>
-                                  {round && (
-                                    <>
-                                      <RefreshCw size={14} aria-hidden />
-                                      <span>Round trip</span>
-                                      <span className="trip-dot">•</span>
-                                    </>
-                                  )}
-                                  {r.flight && (
-                                    <>
-                                      <Plane size={14} aria-label="Flight" />
-                                      <span>{formatFlightSummary(r.flight)}</span>
-                                      <span className="trip-dot">•</span>
-                                    </>
-                                  )}
-                                  {r.paid && <CreditCard size={15} aria-label={r.captured ? 'Captured' : 'Authorized'} />}
-                                  {r.paid && <span>{r.captured ? 'Captured' : 'Authorized'}</span>}
-                                  {!r.paid && <span>Pending pay</span>}
-                                  {r.insidePickup && (
-                                    <>
-                                      <span className="trip-dot">•</span>
-                                      <DoorOpen size={14} aria-label="Inside pickup" />
-                                      <span>Inside pickup</span>
-                                    </>
-                                  )}
-                                </p>
-                                {airportLine && !r.flight ? (
+                                {(r.paid || r.carSeat || r.insidePickup) && (
+                                  <p className="trip-card-meta">
+                                    {r.paid && <CreditCard size={16} aria-label={r.captured ? 'Captured' : 'Authorized'} />}
+                                    {r.paid && <span>{r.captured ? 'Captured' : 'Authorized'}</span>}
+                                    {r.paid && (round || r.service === 'hourly' || r.carSeat || r.insidePickup) && <span className="trip-dot">•</span>}
+                                    {round && <RefreshCw size={15} aria-hidden />}
+                                    {round && <span>Round trip</span>}
+                                    {!round && r.service === 'hourly' && <span>Hourly</span>}
+                                    {r.carSeat && <Baby size={15} aria-label="Car seat" />}
+                                    {r.carSeat && <span>Car seat</span>}
+                                    {r.insidePickup && <DoorOpen size={15} aria-label="Inside pickup" />}
+                                    {r.insidePickup && <span>Inside pickup</span>}
+                                  </p>
+                                )}
+                                {airportLine ? (
                                   <p className="trip-card-flight">
                                     <Plane size={16} />
                                     <span>{airportLine}</span>
@@ -1115,14 +1100,6 @@ export function TripBoard({
                                   {st === 'no_show' ? 'No-show' : st[0].toUpperCase() + st.slice(1)}
                                 </span>
                               )}
-                              <button
-                                type="button"
-                                className="trip-text-btn"
-                                style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700 }}
-                                onClick={() => setSelectedId(r.id)}
-                              >
-                                Details →
-                              </button>
                             </div>
                           </article>
                         </li>
