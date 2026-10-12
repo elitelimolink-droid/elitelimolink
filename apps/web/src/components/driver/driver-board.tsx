@@ -26,6 +26,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  SunMedium,
   User,
   UserCheck,
   Users,
@@ -100,17 +101,6 @@ function appleMapsUrl(addr: string) {
   return `https://maps.apple.com/?daddr=${encodeURIComponent(addr)}`;
 }
 
-function headingName(deg: number): string {
-  if (deg >= 337.5 || deg < 22.5) return 'N';
-  if (deg >= 22.5 && deg < 67.5) return 'NE';
-  if (deg >= 67.5 && deg < 112.5) return 'E';
-  if (deg >= 112.5 && deg < 157.5) return 'SE';
-  if (deg >= 157.5 && deg < 202.5) return 'S';
-  if (deg >= 202.5 && deg < 247.5) return 'SW';
-  if (deg >= 247.5 && deg < 292.5) return 'W';
-  return 'NW';
-}
-
 /**
  * Maps the reservation record into a 0-4 lifecycle step:
  * 0: Assigned (waiting for driver to accept)
@@ -150,9 +140,23 @@ export function DriverBoard({
   const [actingTripId, setActingTripId] = useState('');
   const [actionError, setActionError] = useState('');
 
-  // GPS Broadcast & Drive View State
+  // GPS Broadcast, WakeLock & Drive View State
   const [gpsStatus, setGpsStatus] = useState<'requesting' | 'active' | 'standby' | 'denied' | 'unsupported'>('requesting');
-  const [lastCoords, setLastCoords] = useState<{ lat: number; lng: number; speed: number; heading: number } | null>(null);
+  const [lastCoords, setLastCoords] = useState<{ lat: number; lng: number; speed: number; heading: number } | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('ell_last_driver_coords');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (typeof parsed?.lat === 'number' && typeof parsed?.lng === 'number') {
+            return { lat: parsed.lat, lng: parsed.lng, speed: parsed.speed || 0, heading: parsed.heading || 0 };
+          }
+        }
+      } catch {}
+    }
+    return null;
+  });
+  const [screenAwake, setScreenAwake] = useState(true);
   const [driveViewTripId, setDriveViewTripId] = useState<string | null>(null);
 
   // Notes state per trip
@@ -442,6 +446,14 @@ export function DriverBoard({
 
   async function reportDriverGps(lat: number, lng: number, heading: number, speedMph: number) {
     try {
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(
+            'ell_last_driver_coords',
+            JSON.stringify({ lat, lng, speed: speedMph, heading, updatedAt: Date.now() })
+          );
+        } catch {}
+      }
       await fetch('/api/driver-location', {
         method: 'POST',
         headers: {
@@ -453,7 +465,7 @@ export function DriverBoard({
           lng,
           heading,
           speed: speedMph,
-          tripId: activeRide?.id,
+          tripId: activeRide?.id || driveViewTripId || undefined,
           onDuty: true,
         }),
       });
@@ -461,6 +473,93 @@ export function DriverBoard({
       // silent
     }
   }
+
+  // Screen Wake Lock: Keeps the chauffeur's phone screen awake while driving
+  useEffect(() => {
+    let wakeLockSentinel: any = null;
+    let isMounted = true;
+
+    async function enableWakeLock() {
+      if (typeof window === 'undefined') return;
+      try {
+        if ('wakeLock' in navigator && (navigator as any).wakeLock?.request) {
+          wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+          if (isMounted) setScreenAwake(true);
+          wakeLockSentinel.addEventListener('release', () => {
+            if (isMounted) setScreenAwake(false);
+          });
+        }
+      } catch {
+        if (isMounted) setScreenAwake(false);
+      }
+    }
+
+    void enableWakeLock();
+
+    // Re-acquire wake lock and trigger GPS broadcast when phone screen turns on / unlocks
+    function onWakeOrFocus() {
+      if (document.visibilityState === 'visible') {
+        void enableWakeLock();
+        void broadcastCurrentOrPickup();
+      }
+    }
+
+    document.addEventListener('visibilitychange', onWakeOrFocus);
+    window.addEventListener('focus', onWakeOrFocus);
+    window.addEventListener('pageshow', onWakeOrFocus);
+
+    return () => {
+      isMounted = false;
+      document.removeEventListener('visibilitychange', onWakeOrFocus);
+      window.removeEventListener('focus', onWakeOrFocus);
+      window.removeEventListener('pageshow', onWakeOrFocus);
+      try {
+        if (wakeLockSentinel) void wakeLockSentinel.release();
+      } catch {}
+    };
+  }, []);
+
+  // Background GPS Heartbeat Worker: Keeps live GPS streaming even if tab/phone is backgrounded or screen sleeps
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof Worker === 'undefined') return;
+
+    let worker: Worker | null = null;
+    let workerUrl = '';
+    try {
+      const code = `
+        var timer = null;
+        self.onmessage = function(e) {
+          if (e.data === 'start') {
+            if (!timer) {
+              timer = setInterval(function() {
+                self.postMessage('ping');
+              }, 8000);
+            }
+          } else if (e.data === 'stop') {
+            if (timer) clearInterval(timer);
+            timer = null;
+          }
+        };
+      `;
+      const blob = new Blob([code], { type: 'application/javascript' });
+      workerUrl = URL.createObjectURL(blob);
+      worker = new Worker(workerUrl);
+      worker.onmessage = () => {
+        void broadcastCurrentOrPickup();
+      };
+      worker.postMessage('start');
+    } catch {}
+
+    return () => {
+      if (worker) {
+        worker.postMessage('stop');
+        worker.terminate();
+      }
+      if (workerUrl) {
+        URL.revokeObjectURL(workerUrl);
+      }
+    };
+  }, [activeRide?.id, activeRide?.pickup]);
 
   async function broadcastCurrentOrPickup() {
     setActionError('');
@@ -689,28 +788,9 @@ export function DriverBoard({
           >
             <Compass size={13} /> Driver View
           </button>
-          <button
-            type="button"
-            className={`driver-gps-pill ${gpsStatus === 'active' ? 'active' : gpsStatus === 'denied' ? 'denied' : ''}`}
-            onClick={() => void broadcastCurrentOrPickup()}
-            style={{ cursor: 'pointer', border: 0 }}
-            title="Click to refresh or broadcast location"
-          >
-            <span
-              className="driver-duty-dot"
-              style={{
-                background:
-                  gpsStatus === 'active' ? '#22c55e' : gpsStatus === 'denied' ? '#ef4444' : '#eab308',
-              }}
-            />
-            {gpsStatus === 'active'
-              ? 'GPS Live'
-              : gpsStatus === 'denied'
-              ? 'GPS Off (Tap to Set)'
-              : gpsStatus === 'standby'
-              ? 'Standby (Tap to Send)'
-              : 'GPS Connecting…'}
-          </button>
+          <span className="driver-wakelock-pill" title="Screen Wake Lock is active">
+            <SunMedium size={12} /> Screen Awake
+          </span>
           <span className="driver-duty-badge">
             <span className="driver-duty-dot" /> On Duty
           </span>
@@ -1361,7 +1441,7 @@ export function DriverBoard({
 
               {/* Standby Topbar */}
               <header className="driver-driveview-topbar">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     className="driver-tool-btn"
@@ -1380,24 +1460,24 @@ export function DriverBoard({
                   >
                     <Calendar size={14} /> All Trips
                   </button>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="driver-wakelock-pill" title="Screen Wake Lock is active">
+                    <SunMedium size={12} /> Screen Awake
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span className="fleet-live-pulse" />
-                    <strong style={{ fontSize: 15, letterSpacing: '.03em', color: '#fff' }}>
-                      DRIVE VIEW · CHAUFFEUR STANDBY
+                    <strong style={{ fontSize: 14, color: '#fff' }}>
+                      STANDBY COCKPIT
                     </strong>
-                    <span style={{ fontSize: 12, color: '#38bdf8', fontWeight: 700 }}>
-                      (Awaiting Dispatch Assignment)
-                    </span>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <a
                     href="tel:+12015550199"
                     className="driver-tool-btn"
                     style={{ background: '#0284c7', color: '#fff', border: 0, fontWeight: 800 }}
                   >
-                    <Phone size={14} /> Dispatch Office
+                    <Phone size={13} /> Dispatch Office
                   </a>
                 </div>
               </header>
@@ -1406,68 +1486,30 @@ export function DriverBoard({
               <div className="driver-driveview-hud">
                 <div className="driver-hud-destination">
                   <div className="driver-hud-dest-label">
-                    <MapPin size={16} color="#38bdf8" />
-                    <span>Cockpit Status · Standby &amp; Telemetry Active</span>
+                    <MapPin size={15} color="#38bdf8" />
+                    <span>CHAUFFEUR STATUS</span>
+                    <span className="driver-time-pill" style={{ color: '#4ade80' }}>
+                      <span className="driver-duty-dot" style={{ background: '#22c55e' }} /> On Duty
+                    </span>
                   </div>
                   <h2 className="driver-hud-dest-address">Awaiting Next Dispatch Assignment</h2>
-                  <p style={{ margin: '0 0 16px', fontSize: 14, color: '#94a3b8', lineHeight: 1.5 }}>
-                    Your vehicle is connected live to Central Dispatch. When a mission is assigned to your vehicle, your Cockpit HUD will automatically activate with turn-by-turn navigation and passenger routing.
+                  <p style={{ margin: '0 0 12px', fontSize: 13, color: '#94a3b8', lineHeight: 1.4 }}>
+                    Your vehicle is connected live to Central Dispatch. When an assignment is sent, your HUD navigation activates automatically.
                   </p>
-                  <div className="driver-hud-nav-buttons">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
                     <a
                       href="tel:+12015550199"
                       className="driver-hud-nav-btn google"
+                      style={{ padding: '12px 14px', fontSize: 14 }}
                     >
-                      <Phone size={18} /> Call Dispatch (201) 555-0199
+                      <Phone size={16} /> Call Dispatch Office (201) 555-0199
                     </a>
-                    <button
-                      type="button"
-                      className="driver-hud-nav-btn apple"
-                      onClick={() => void broadcastCurrentOrPickup()}
-                    >
-                      <Radio size={18} /> Ping GPS to Dispatch
-                    </button>
                   </div>
                 </div>
 
-                {/* Telemetry Readout */}
-                <div className="driver-hud-telemetry">
-                  <div className="driver-hud-tele-card">
-                    <span className="driver-hud-tele-val">{lastCoords?.speed ?? 0} MPH</span>
-                    <span className="driver-hud-tele-lbl">Vehicle Speed</span>
-                  </div>
-                  <div className="driver-hud-tele-card">
-                    <span className="driver-hud-tele-val">
-                      {headingName(lastCoords?.heading ?? 0)} ({Math.round(lastCoords?.heading ?? 0)}°)
-                    </span>
-                    <span className="driver-hud-tele-lbl">Compass Heading</span>
-                  </div>
-                  <div className="driver-hud-tele-card">
-                    <button
-                      type="button"
-                      onClick={() => void broadcastCurrentOrPickup()}
-                      style={{ background: 'transparent', border: 0, padding: 0, textAlign: 'left', cursor: 'pointer', color: 'inherit' }}
-                      title="Tap to refresh location broadcast"
-                    >
-                      <span className="driver-hud-tele-val" style={{ fontSize: 15, color: gpsStatus === 'active' ? '#4ade80' : '#fbbf24', display: 'block' }}>
-                        {gpsStatus === 'active'
-                          ? '🟢 Live GPS Stream'
-                          : gpsStatus === 'denied'
-                          ? '🔴 GPS Off (Tap to Set)'
-                          : '🟡 Standby (Tap to Send)'}
-                      </span>
-                      <span className="driver-hud-tele-lbl">Dispatch Link 📡</span>
-                    </button>
-                  </div>
-                  <div className="driver-hud-tele-card">
-                    <span className="driver-hud-tele-val">{profile.vehicle?.toUpperCase() || 'SEDAN'}</span>
-                    <span className="driver-hud-tele-lbl">Assigned Vehicle</span>
-                  </div>
-                </div>
-
-                {/* Duty Banner */}
+                {/* Duty Ready Banner */}
                 <div className="driver-hud-big-action done" style={{ background: '#131d2e', border: '1px solid #1e293b', color: '#38bdf8' }}>
-                  <Sparkles size={22} /> CHAUFFEUR ON DUTY · SYSTEM READY FOR DISPATCH
+                  <Sparkles size={18} /> READY FOR DISPATCH ASSIGNMENT
                 </div>
               </div>
             </div>
@@ -1635,7 +1677,7 @@ export function DriverBoard({
             )}
 
             <header className="driver-driveview-topbar">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="driver-tool-btn"
@@ -1654,33 +1696,33 @@ export function DriverBoard({
                 >
                   <Calendar size={14} /> All Trips
                 </button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="driver-wakelock-pill" title="Screen Wake Lock is active">
+                  <SunMedium size={12} /> Screen Awake
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span className="fleet-live-pulse" />
-                  <strong style={{ fontSize: 15, letterSpacing: '.03em', color: '#fff' }}>
-                    DRIVE VIEW · {t.name || 'Guest'}
+                  <strong style={{ fontSize: 14, color: '#fff' }}>
+                    {t.name || 'Guest'}
                   </strong>
-                  <span style={{ fontSize: 12, color: '#94a3b8' }}>
-                    (RB-{t.id.slice(-8).toUpperCase()})
-                  </span>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {t.phone && (
                   <>
                     <a
                       href={`tel:${t.phone.replace(/[^\d+]/g, '')}`}
                       className="driver-tool-btn"
-                      style={{ background: '#2563eb', color: '#fff', border: 0, fontWeight: 800 }}
+                      style={{ background: '#2563eb', color: '#fff', border: 0, fontWeight: 800, padding: '6px 10px' }}
                     >
-                      <Phone size={14} /> Call Guest
+                      <Phone size={13} /> Call
                     </a>
                     <a
                       href={`sms:${t.phone.replace(/[^\d+]/g, '')}`}
                       className="driver-tool-btn"
-                      style={{ background: '#0284c7', color: '#fff', border: 0, fontWeight: 800 }}
+                      style={{ background: '#0284c7', color: '#fff', border: 0, fontWeight: 800, padding: '6px 10px' }}
                     >
-                      <MessageSquare size={14} /> SMS
+                      <MessageSquare size={13} /> SMS
                     </a>
                   </>
                 )}
@@ -1691,19 +1733,22 @@ export function DriverBoard({
               {/* Destination & Instant Turn-by-Turn GPS Navigation Card */}
               <div className="driver-hud-destination">
                 <div className="driver-hud-dest-label">
-                  <MapPin size={16} color="#38bdf8" />
-                  <span>Next Destination · {targetLabel}</span>
+                  <MapPin size={15} color="#38bdf8" />
+                  <span>{targetLabel}</span>
                   {t.flight && (
-                    <span style={{ background: '#1e293b', color: '#7dd3fc', padding: '2px 8px', borderRadius: 4, marginLeft: 'auto' }}>
+                    <span className="driver-flight-pill">
                       Flight: {t.flight}
                     </span>
                   )}
+                  <span className="driver-time-pill">
+                    <Clock size={11} /> {clock(t.pickupAt)}
+                  </span>
                 </div>
                 <h2 className="driver-hud-dest-address">{targetAddress || 'Address to be confirmed'}</h2>
 
                 {t.extraStop && (
-                  <div style={{ fontSize: 13, color: '#facc15', marginBottom: 14 }}>
-                    ⚠️ Extra Stop on route: {t.extraStop}
+                  <div style={{ fontSize: 12, color: '#facc15', marginBottom: 10 }}>
+                    ⚠️ Extra Stop: {t.extraStop}
                   </div>
                 )}
 
@@ -1715,7 +1760,7 @@ export function DriverBoard({
                       rel="noopener noreferrer"
                       className="driver-hud-nav-btn google"
                     >
-                      <Navigation size={18} /> Google Maps
+                      <Navigation size={15} /> Google
                     </a>
                     <a
                       href={wazeUrl(targetAddress)}
@@ -1723,7 +1768,7 @@ export function DriverBoard({
                       rel="noopener noreferrer"
                       className="driver-hud-nav-btn waze"
                     >
-                      <Compass size={18} /> Waze
+                      <Compass size={15} /> Waze
                     </a>
                     <a
                       href={appleMapsUrl(targetAddress)}
@@ -1731,48 +1776,13 @@ export function DriverBoard({
                       rel="noopener noreferrer"
                       className="driver-hud-nav-btn apple"
                     >
-                      <Navigation size={18} /> Apple Maps
+                      <Navigation size={15} /> Apple
                     </a>
                   </div>
                 )}
               </div>
 
-              {/* Chauffeur Telemetry Cockpit Readout */}
-              <div className="driver-hud-telemetry">
-                <div className="driver-hud-tele-card">
-                  <span className="driver-hud-tele-val">{lastCoords?.speed ?? 0} MPH</span>
-                  <span className="driver-hud-tele-lbl">Vehicle Speed</span>
-                </div>
-                <div className="driver-hud-tele-card">
-                  <span className="driver-hud-tele-val">
-                    {headingName(lastCoords?.heading ?? 0)} ({Math.round(lastCoords?.heading ?? 0)}°)
-                  </span>
-                  <span className="driver-hud-tele-lbl">Compass Heading</span>
-                </div>
-                <div className="driver-hud-tele-card">
-                  <button
-                    type="button"
-                    onClick={() => void broadcastCurrentOrPickup()}
-                    style={{ background: 'transparent', border: 0, padding: 0, textAlign: 'left', cursor: 'pointer', color: 'inherit' }}
-                    title="Tap to refresh or broadcast location"
-                  >
-                    <span className="driver-hud-tele-val" style={{ fontSize: 15, color: gpsStatus === 'active' ? '#4ade80' : '#fbbf24', display: 'block' }}>
-                      {gpsStatus === 'active'
-                        ? '🟢 Live GPS Stream'
-                        : gpsStatus === 'denied'
-                        ? '🔴 GPS Off (Tap to Set)'
-                        : '🟡 Standby (Tap to Send)'}
-                    </span>
-                    <span className="driver-hud-tele-lbl">Dispatch Link 📡</span>
-                  </button>
-                </div>
-                <div className="driver-hud-tele-card">
-                  <span className="driver-hud-tele-val">{clock(t.pickupAt)}</span>
-                  <span className="driver-hud-tele-lbl">Scheduled Time</span>
-                </div>
-              </div>
-
-              {/* Giant Mission Step Progression Button */}
+              {/* Giant Mission Step Progression Button - Directly Below Destination */}
               <div>
                 {stage === 0 && (
                   <button
@@ -1781,7 +1791,7 @@ export function DriverBoard({
                     disabled={isBusy}
                     onClick={() => handleTripAction(t.id, 'accept')}
                   >
-                    {isBusy ? <Loader2 size={24} className="animate-spin" /> : <Check size={24} strokeWidth={3} />}
+                    {isBusy ? <Loader2 size={20} className="animate-spin" /> : <Check size={20} strokeWidth={3} />}
                     ACCEPT RIDE &amp; START ROUTE
                   </button>
                 )}
@@ -1793,7 +1803,7 @@ export function DriverBoard({
                     disabled={isBusy}
                     onClick={() => handleTripAction(t.id, 'arrive')}
                   >
-                    {isBusy ? <Loader2 size={24} className="animate-spin" /> : <MapPin size={24} strokeWidth={3} />}
+                    {isBusy ? <Loader2 size={20} className="animate-spin" /> : <MapPin size={20} strokeWidth={3} />}
                     I’VE ARRIVED AT PICKUP LOCATION
                   </button>
                 )}
@@ -1805,8 +1815,8 @@ export function DriverBoard({
                     disabled={isBusy}
                     onClick={() => handleTripAction(t.id, 'pickup')}
                   >
-                    {isBusy ? <Loader2 size={24} className="animate-spin" /> : <UserCheck size={24} strokeWidth={3} />}
-                    PASSENGER ON BOARD (PROCEED TO DROPOFF)
+                    {isBusy ? <Loader2 size={20} className="animate-spin" /> : <UserCheck size={20} strokeWidth={3} />}
+                    PASSENGER ON BOARD (TO DROPOFF)
                   </button>
                 )}
 
@@ -1817,15 +1827,15 @@ export function DriverBoard({
                     disabled={isBusy}
                     onClick={() => handleTripAction(t.id, 'dropoff')}
                   >
-                    {isBusy ? <Loader2 size={24} className="animate-spin" /> : <Flag size={24} strokeWidth={3} />}
-                    COMPLETE TRIP (PASSENGER SAFELY DROPPED OFF)
+                    {isBusy ? <Loader2 size={20} className="animate-spin" /> : <Flag size={20} strokeWidth={3} />}
+                    COMPLETE TRIP (DROPPED OFF)
                   </button>
                 )}
 
                 {stage === 4 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div className="driver-hud-big-action done">
-                      <CheckCircle2 size={24} /> TRIP COMPLETED SUCCESSFULLY
+                      <CheckCircle2 size={20} /> TRIP COMPLETED SUCCESSFULLY
                     </div>
                     {(() => {
                       const nextTrip = sorted.find((x) => x.id !== t.id && getTripStage(x) < 4);
@@ -1836,7 +1846,7 @@ export function DriverBoard({
                             className="driver-hud-big-action accept"
                             onClick={() => setDriveViewTripId(nextTrip.id)}
                           >
-                            <Navigation size={22} /> NEXT MISSION: {nextTrip.name || 'Guest'} ({clock(nextTrip.pickupAt)})
+                            <Navigation size={18} /> NEXT MISSION: {nextTrip.name || 'Guest'} ({clock(nextTrip.pickupAt)})
                           </button>
                         );
                       }
@@ -1850,7 +1860,7 @@ export function DriverBoard({
                             setActiveTab('drive');
                           }}
                         >
-                          <Compass size={22} /> RETURN TO STANDBY COCKPIT HUD
+                          <Compass size={18} /> RETURN TO STANDBY COCKPIT
                         </button>
                       );
                     })()}
@@ -1858,39 +1868,53 @@ export function DriverBoard({
                 )}
               </div>
 
-              {/* In-Drive Notes Section */}
-              <div className="driver-hud-destination" style={{ padding: 18 }}>
-                <div className="driver-hud-dest-label">
-                  <span>Trip Notes &amp; Status Report</span>
+              {/* Compact In-Drive Notes Section */}
+              <div className="driver-hud-notes-box">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: '#94a3b8' }}>
+                    Trip Notes &amp; Tolls
+                  </span>
                   {t.driverNotes && (
-                    <span style={{ color: '#4ade80', fontSize: 11, marginLeft: 'auto' }}>
-                      ✓ Note recorded in database
+                    <span style={{ color: '#4ade80', fontSize: 11 }}>
+                      ✓ Saved
                     </span>
                   )}
                 </div>
-                <textarea
-                  className="driver-note-textarea"
-                  rows={2}
-                  style={{ background: '#090d16', borderColor: '#334155', color: '#fff' }}
-                  value={currentDraft}
-                  onChange={(e) => setNotesDraft((prev) => ({ ...prev, [t.id]: e.target.value }))}
-                  placeholder="Record toll receipts, passenger notes, luggage or delay details..."
-                />
-                <button
-                  type="button"
-                  className={`driver-note-save-btn${isNoteSaved ? ' saved' : ''}`}
-                  style={{ marginTop: 8 }}
-                  disabled={isNoteBusy}
-                  onClick={() => handleSaveNote(t.id)}
-                >
-                  {isNoteBusy ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                  {isNoteSaved ? 'Note Saved!' : isNoteBusy ? 'Saving…' : 'Save Trip Note'}
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    className="driver-note-textarea"
+                    style={{ background: '#090d16', borderColor: '#334155', color: '#fff', minHeight: 'auto', height: 38, padding: '6px 10px', fontSize: 13, flex: 1 }}
+                    value={currentDraft}
+                    onChange={(e) => setNotesDraft((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                    placeholder="Toll receipts, luggage, delay notes..."
+                  />
+                  <button
+                    type="button"
+                    className={`driver-note-save-btn${isNoteSaved ? ' saved' : ''}`}
+                    style={{ marginTop: 0, padding: '0 14px', height: 38, whiteSpace: 'nowrap' }}
+                    disabled={isNoteBusy}
+                    onClick={() => handleSaveNote(t.id)}
+                  >
+                    {isNoteBusy ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                    {isNoteSaved ? 'Saved!' : 'Save'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         );
       })()}
+
+      {/* Invisible looping video element to prevent screen sleep on iOS / mobile Safari */}
+      <video
+        playsInline
+        muted
+        loop
+        autoPlay
+        style={{ position: 'fixed', top: -100, left: -100, width: 1, height: 1, opacity: 0.001, pointerEvents: 'none' }}
+        src="data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDJpc29tYXZjMQAAADpmcmVlAAAAG21kYXQAAAGzAAABt///wAAAAAg="
+      />
     </main>
   );
 }
