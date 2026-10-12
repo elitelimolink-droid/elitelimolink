@@ -289,7 +289,20 @@ export function BookingExperience({ initialBusinessName, initialBizId }: { initi
   const markSecond = brandInitials[1] || brandInitials[0] || 'L';
   return <main className="booking-page">
     <div className="ambient ambient-one" /><div className="ambient ambient-two" />
-    <div className="page-brand"><span className="brand-mark">{markFirst}<span>{markSecond}</span></span><span className="brand-word">{businessName}<span className="brand-sub"> / RESERVATIONS</span></span></div>
+    <div className="page-brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', maxWidth: 1100, margin: '0 auto 20px', padding: '0 16px', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span className="brand-mark">{markFirst}<span>{markSecond}</span></span>
+        <span className="brand-word">{businessName}<span className="brand-sub"> / RESERVATIONS</span></span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <a href="/dashboard" style={{ textDecoration: 'none', fontSize: 13, fontWeight: 700, padding: '7px 14px', background: '#2563eb', color: '#ffffff', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}>
+          Elite Dispatch →
+        </a>
+        <a href="/driver" style={{ textDecoration: 'none', fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>
+          Şoför Portalı
+        </a>
+      </div>
+    </div>
     {done ? (
       <div className="payment-card">
         <ThemeToggle className="theme-toggle card-theme" />
