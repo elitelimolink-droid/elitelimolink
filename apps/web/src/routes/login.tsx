@@ -130,26 +130,6 @@ export default function LoginPage() {
           <button type="button" className="auth-switch" onClick={() => switchMode(isSignup ? 'signin' : 'signup')}>
             {isSignup ? 'Already have a dashboard? Sign in' : 'New business? Create your own dashboard'}
           </button>
-          <a
-            href="/dashboard"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              marginTop: 10,
-              padding: '10px 14px',
-              borderRadius: 8,
-              background: '#2563eb',
-              color: '#ffffff',
-              fontSize: 14,
-              fontWeight: 700,
-              textDecoration: 'none',
-              textAlign: 'center',
-            }}
-          >
-            Dispatch Dashboard'a Giriş Yap (Direct Access) →
-          </a>
           <p className="auth-footnote">Every operator sees only their own business data.</p>
         </form>
       )}

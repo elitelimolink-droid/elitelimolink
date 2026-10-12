@@ -38,7 +38,7 @@ export function requireAuth(_redirectTo = '/login') {
 		return record;
 	}
 
-	// Graceful fallback so operator is NEVER locked out or kicked to /driver
+	// Graceful fallback so operator is NEVER locked out, kicked to /driver, or redirected
 	return {
 		id: 'operator_dispatch',
 		email: 'dispatch@elitelimolink.com',
@@ -54,7 +54,7 @@ export function requireDriverAuth(_redirectTo = '/driver/login') {
 		return record;
 	}
 
-	// Graceful fallback so driver is NEVER locked out or kicked to /dashboard
+	// Graceful fallback so driver is NEVER locked out
 	return {
 		id: 'driver_default',
 		email: 'driver@elitelimolink.com',
