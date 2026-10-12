@@ -51,8 +51,7 @@ export function handlePbAuthError(err: unknown): boolean {
   } catch {
     /* ignore */
   }
-  // Do not hard-redirect away if on dashboard or dispatch; allow operator to stay
-  if (typeof window !== 'undefined' && !window.location.pathname.includes('/dashboard') && !window.location.pathname.includes('/dispatch')) {
+  if (typeof window !== 'undefined') {
     window.location.assign('/login?expired=1');
   }
   return true;

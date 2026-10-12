@@ -22,15 +22,35 @@ export function HydrateFallback() {
   return <div className="dashboard-loading" />;
 }
 
-import { TripBoard } from '@/components/dashboard/trip-board';
-
 export default function DispatchPage({ loaderData }: Route.ComponentProps) {
   return (
-    <main>
-      <TripBoard
-        email={loaderData.user?.email}
-        userId={loaderData.user?.id ?? ''}
-      />
+    <main className="dashboard-page">
+      <div className="ambient ambient-one" />
+      <div className="ambient ambient-two" />
+      <header className="dashboard-header">
+        <a href="/" className="page-brand" style={{ textDecoration: 'none' }}>
+          <span className="brand-mark">B<span>L</span></span>
+          <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / DISPATCH</span></span>
+        </a>
+        <div className="dashboard-user">
+          <span>{loaderData.user?.email}</span>
+          <ThemeToggle className="theme-toggle compact" />
+          <a href="/dashboard" className="dashboard-link">Settings</a>
+          <a href="/" className="dashboard-link">View site</a>
+        </div>
+      </header>
+      <div className="dashboard-shell">
+        <div className="dashboard-intro">
+          <span className="eyebrow">DISPATCH CENTER</span>
+          <h1>Reservations, live</h1>
+          <p>
+            Every booking appears here the moment a customer requests it. Search and filter by
+            status, open any reservation to update trip details, change its status, or remove it —
+            changes sync back to the customer confirmation and your records instantly.
+          </p>
+        </div>
+        <DispatchCenter />
+      </div>
     </main>
   );
 }
