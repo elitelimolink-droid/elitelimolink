@@ -1501,5 +1501,122 @@ html.dark .driver-route-connector::before { background: repeating-linear-gradien
 .driver-active-filter-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
 html.dark .driver-active-filter-pill { background: #1e293b; color: #38bdf8; border-color: #334155; }
 
+/* Chauffeur Mobile App Shell - Sleek Black Background, White Typography & Vibrant Accents */
+.driver-app-shell { min-height: 100dvh; background: #030712; color: #ffffff; display: flex; flex-direction: column; position: relative; overflow-x: hidden; }
+
+.driver-app-container { width: 100%; max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; flex: 1; background: #080d1a; min-height: 100dvh; box-shadow: 0 0 50px rgba(0,0,0,0.8); border-left: 1px solid #111827; border-right: 1px solid #111827; }
+
+/* App Top Header Matching Reference Screenshot */
+.driver-dashboard-header { position: sticky; top: 0; z-index: 45; display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: #060a14; border-bottom: 1px solid #1a263d; gap: 12px; }
+
+.driver-header-icon-btn { background: transparent; border: 0; cursor: pointer; color: #ffffff; padding: 6px; display: grid; place-items: center; border-radius: 8px; transition: all .15s ease; }
+.driver-header-icon-btn:hover { color: #38bdf8; background: #131d31; }
+.driver-header-icon-btn.active { color: #38bdf8; background: #1e2b45; }
+
+.driver-dashboard-title { font-size: 21px; font-weight: 800; color: #ffffff; margin: 0; flex: 1; letter-spacing: -0.02em; }
+.driver-dashboard-actions { display: flex; align-items: center; gap: 4px; }
+.driver-bell-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 2px #060a14; }
+
+/* Sub-header Filter Bar Matching Reference Screenshot ("Next 30 days, oldest trip date first") */
+.driver-filter-subbar { position: sticky; top: 56px; z-index: 40; background: #070c18; border-bottom: 1px solid #1a263d; padding: 0; }
+.driver-filter-subbar-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 11px 18px; background: transparent; border: 0; cursor: pointer; text-align: left; transition: background .15s ease; }
+.driver-filter-subbar-btn:hover { background: #0d1527; }
+.driver-filter-text { font-size: 14px; font-weight: 700; color: #ffffff; letter-spacing: -0.01em; }
+.driver-funnel-icon { color: #94a3b8; display: grid; place-items: center; transition: color .15s ease; }
+.driver-filter-subbar-btn:hover .driver-funnel-icon { color: #38bdf8; }
+
+/* Filter Dropdown Modal / Popover */
+.driver-filter-dropdown { position: absolute; top: 104px; left: 16px; right: 16px; background: #0d1527; border: 1px solid #25334d; border-radius: 14px; box-shadow: 0 16px 36px rgba(0,0,0,0.6); padding: 14px; z-index: 50; display: flex; flex-direction: column; gap: 12px; animation: addonReveal 0.15s ease-out; }
+.driver-filter-dropdown-head { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: .06em; padding-bottom: 6px; border-bottom: 1px solid #1e293b; }
+.driver-filter-dropdown-head button { background: transparent; border: 0; color: #94a3b8; cursor: pointer; display: grid; place-items: center; padding: 2px; }
+.driver-filter-dropdown-head button:hover { color: #fff; }
+.driver-filter-options { display: flex; flex-direction: column; gap: 5px; }
+.driver-filter-opt { width: 100%; text-align: left; padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: #cbd5e1; background: transparent; border: 0; cursor: pointer; transition: all .15s ease; }
+.driver-filter-opt:hover { background: #162238; color: #fff; }
+.driver-filter-opt.active { background: #1d3b65; color: #38bdf8; font-weight: 800; }
+.driver-filter-sort-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 10px; border-top: 1px solid #1e293b; }
+.driver-sort-pill { font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 6px; background: #162238; color: #94a3b8; border: 1px solid #25334d; cursor: pointer; transition: all .15s ease; }
+.driver-sort-pill:hover { color: #fff; border-color: #38bdf8; }
+.driver-sort-pill.active { background: #2563eb; color: #fff; border-color: #3b82f6; }
+
+/* Inline Search Bar */
+.driver-inline-searchbar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: #0d1527; border-bottom: 1px solid #1a263d; }
+.driver-inline-searchbar input { flex: 1; background: #131d31; border: 1px solid #25334d; border-radius: 8px; color: #fff; font-size: 13px; padding: 7px 12px; outline: none; }
+.driver-inline-searchbar input:focus { border-color: #38bdf8; }
+.driver-inline-searchbar button { background: transparent; border: 0; color: #94a3b8; cursor: pointer; display: grid; place-items: center; padding: 4px; }
+
+/* Notifications Box */
+.driver-notifications-box { margin: 12px 16px 0; padding: 12px 14px; background: #0d1527; border: 1px solid #25334d; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+
+/* App Content Area */
+.driver-app-body { flex: 1; padding: 14px 16px 40px; display: flex; flex-direction: column; background: #080d1a; color: #ffffff; }
+
+/* Date Section Headers (Matching Reference: "Friday, October 23rd", "Sunday, October 25th", etc.) */
+.driver-dashboard-list { display: flex; flex-direction: column; gap: 8px; }
+.driver-date-section { margin-bottom: 12px; }
+.driver-date-header { font-size: 16.5px; font-weight: 800; color: #ffffff; margin: 12px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid #1a263d; letter-spacing: -0.01em; }
+
+/* High-Density Compact Trip Group */
+.driver-compact-group { display: flex; flex-direction: column; gap: 10px; }
+
+/* High-Density Compact Card (Matching Screenshot Details) */
+.driver-compact-card { background: #0c1424; border: 1px solid #1c2a42; border-left: 3.5px solid #22c55e; border-radius: 11px; overflow: hidden; transition: all .15s ease; box-shadow: 0 4px 14px rgba(0,0,0,0.3); }
+.driver-compact-card:hover { border-color: #2c3f60; background: #101a2f; transform: translateY(-1px); }
+.driver-compact-card.is-active { border-left-color: #38bdf8; box-shadow: 0 4px 20px rgba(56, 189, 248, 0.2); }
+.driver-compact-card.is-expanded { border-color: #2563eb; background: #0e1729; }
+
+/* Compact Clickable Summary Row */
+.driver-compact-summary { padding: 11px 14px; display: flex; flex-direction: column; gap: 5px; cursor: pointer; user-select: none; }
+.driver-compact-row-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.driver-compact-identity { display: flex; align-items: baseline; gap: 6px; min-width: 0; flex: 1; }
+.driver-compact-name { font-size: 16px; font-weight: 800; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.driver-compact-ref { font-size: 14px; font-weight: 600; color: #94a3b8; flex: none; }
+.driver-compact-time { font-size: 15.5px; font-weight: 800; color: #ffffff; flex: none; text-align: right; }
+
+/* Mid row: calendar icon, round trip, flight tracking */
+.driver-compact-row-mid { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #94a3b8; }
+.driver-compact-icon { color: #94a3b8; display: grid; place-items: center; flex: none; }
+.driver-compact-dot { color: #64748b; font-weight: bold; flex: none; }
+.driver-compact-attr { display: inline-flex; align-items: center; gap: 4px; color: #cbd5e1; font-weight: 600; font-size: 12px; }
+.driver-compact-attr.flight { color: #38bdf8; font-weight: 700; }
+.driver-compact-chevron { color: #64748b; display: grid; place-items: center; flex: none; }
+
+/* Badges row: Confirmed green pill + dot + stage */
+.driver-compact-row-badges { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.driver-badge-confirmed { background: #22c55e; color: #022c22; font-size: 11.5px; font-weight: 800; padding: 2.5px 8.5px; border-radius: 6px; letter-spacing: 0.01em; display: inline-block; }
+.driver-badge-stage { background: #334155; color: #e2e8f0; font-size: 11.5px; font-weight: 700; padding: 2.5px 8.5px; border-radius: 6px; display: inline-block; }
+.driver-badge-stage.enroute { background: #2563eb; color: #ffffff; }
+.driver-badge-stage.arrived { background: #d97706; color: #ffffff; }
+.driver-badge-stage.onboard { background: #9333ea; color: #ffffff; }
+.driver-badge-stage.completed { background: #15803d; color: #ffffff; }
+
+/* Expanded Detailed Accordion Panel */
+.driver-compact-expanded-body { border-top: 1px solid #1c2a42; padding: 14px; background: #080d1a; display: flex; flex-direction: column; gap: 12px; animation: addonReveal 0.2s ease-out; }
+
+/* Route Card in Dark Mode - Crisp Typography & Vibrant Leg Badges */
+.driver-route-card { background: #0f182b; border: 1px solid #1e293b; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+.driver-route-address { color: #ffffff; font-weight: 800; font-size: 17px; margin: 0; line-height: 1.35; word-break: break-word; }
+.driver-route-connector::before { background: repeating-linear-gradient(to bottom, #38bdf8 0, #38bdf8 4px, transparent 4px, transparent 8px); }
+
+/* Colorful Drawer Menu Items */
+.driver-drivemenu-link.btn-upcoming { background: #131d31; color: #818cf8; border: 1px solid #3730a3; }
+.driver-drivemenu-link.btn-upcoming:hover { background: #1e1b4b; color: #a5b4fc; }
+.driver-drivemenu-link.btn-past { background: #062820; color: #34d399; border: 1px solid #047857; }
+.driver-drivemenu-link.btn-past:hover { background: #064e3b; color: #6ee7b7; }
+.driver-drivemenu-link.btn-all { background: #082438; color: #38bdf8; border: 1px solid #0369a1; }
+.driver-drivemenu-link.btn-all:hover { background: #0c4a6e; color: #7dd3fc; }
+.driver-drivemenu-link.btn-settings { background: #2a1b06; color: #fbbf24; border: 1px solid #854d0e; }
+.driver-drivemenu-link.btn-settings:hover { background: #451a03; color: #fde047; }
+.driver-drivemenu-link.btn-dispatch { background: #b45309; color: #ffffff; font-weight: 800; }
+.driver-drivemenu-link.btn-signout { background: #991b1b; color: #ffffff; font-weight: 800; }
+
+/* Empty state */
+.driver-app-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; margin: auto 0; padding: 50px 20px 70px; }
+.driver-empty-illustration { margin-bottom: 24px; }
+.driver-empty-title { font-size: 22px; font-weight: 800; color: #ffffff; margin: 0 0 8px; letter-spacing: -0.01em; }
+.driver-empty-desc { font-size: 14px; color: #94a3b8; margin: 0; line-height: 1.5; max-width: 320px; }
+
+
+
 
 

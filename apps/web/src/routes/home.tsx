@@ -21,11 +21,6 @@ export async function loader({ request, url, params }: Route.LoaderArgs) {
   const searchBiz = url.searchParams.get('biz');
   const slug = (params as Record<string, string | undefined>)?.bizSlug;
 
-  // ELITELIMOLINK domain is strictly for chauffeurs: redirect directly to /driver
-  if (host.includes('elitelimolink') || (!slug && !searchBiz && !host.includes('.'))) {
-    return redirect('/driver');
-  }
-
   // Filter out any known static paths that aren't business slugs
   if (slug && ['login', 'dashboard', 'dispatch', 'driver', 'api', 'payment', 'robots.txt', 'sitemap.xml', 'favicon.ico', 'assets', 'images'].includes(slug.toLowerCase())) {
     throw new Response('Not Found', { status: 404 });
@@ -54,23 +49,6 @@ export async function loader({ request, url, params }: Route.LoaderArgs) {
   return { businessName, bizId };
 }
 
-// Keep chauffeurs isolated to driver portal: redirect root domain and drivers to /driver
-export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname.toLowerCase();
-    const isCustomBiz = window.location.search.includes('biz=') || host.includes('teterboro') || host.includes('alpine');
-    if (host.includes('elitelimolink') || !isCustomBiz) {
-      throw redirect('/driver');
-    }
-  }
-  const record = pb.authStore.record as { collectionName?: string } | null;
-  if (pb.authStore.isValid && record?.collectionName === 'drivers') {
-    throw redirect('/driver');
-  }
-  return serverLoader();
-}
-clientLoader.hydrate = true as const;
-
 export function meta({ matches, location, loaderData }: Route.MetaArgs) {
   const businessName = loaderData?.businessName || DEFAULT_BUSINESS_NAME;
   return seo({ matches, location }, {
@@ -80,15 +58,5 @@ export function meta({ matches, location, loaderData }: Route.MetaArgs) {
 }
 
 export default function HomePage({ loaderData }: Route.ComponentProps) {
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const host = window.location.hostname.toLowerCase();
-      const isCustomBiz = window.location.search.includes('biz=') || host.includes('teterboro') || host.includes('alpine');
-      if (host.includes('elitelimolink') || !isCustomBiz) {
-        window.location.replace('/driver');
-      }
-    }
-  }, []);
-
   return <BookingExperience initialBusinessName={loaderData?.businessName} initialBizId={loaderData?.bizId} />;
 }
