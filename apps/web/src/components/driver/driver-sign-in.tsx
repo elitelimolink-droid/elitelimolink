@@ -34,8 +34,8 @@ export function DriverSignIn() {
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <a href="/" className="page-brand" style={{ textDecoration: 'none' }}>
-        <span className="brand-mark">B<span>L</span></span>
-        <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / DRIVER</span></span>
+        <span className="brand-mark">E<span>L</span></span>
+        <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / CHAUFFEUR</span></span>
       </a>
       {forgot ? (
         <div className="auth-card">

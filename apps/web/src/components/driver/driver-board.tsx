@@ -2,16 +2,30 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Baby,
+  Calendar,
   CarFront,
   Check,
+  CheckCircle2,
+  Clock,
   DoorOpen,
+  ExternalLink,
+  Flag,
   Loader2,
+  LockKeyhole,
   LogOut,
   MapPin,
+  Navigation,
+  Phone,
   Plane,
   RefreshCw,
   Save,
+  Search,
+  Settings,
+  Sparkles,
+  User,
+  UserCheck,
   Users,
+  X,
 } from 'lucide-react';
 import pb from '@/lib/pocketbase-client';
 import { useDriverAuth, type DriverRecord } from '@/hooks/use-driver-auth';
@@ -24,7 +38,7 @@ import {
 import { StatusBadge } from '@/components/dispatch/status-badge';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
 
-type AssignedTrip = {
+export type AssignedTrip = {
   id: string;
   service: string;
   pickup: string;
@@ -40,6 +54,8 @@ type AssignedTrip = {
   phone: string;
   flight: string;
   notes: string;
+  driverNotes?: string;
+  driverStatus?: string;
   carSeat: boolean;
   insidePickup: boolean;
   status: string;
@@ -59,7 +75,34 @@ function dayLabel(iso: string) {
   if (!iso) return 'Date to confirm';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return 'Date to confirm';
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const today = new Date();
+  const isToday =
+    d.getDate() === today.getDate() &&
+    d.getMonth() === today.getMonth() &&
+    d.getFullYear() === today.getFullYear();
+  if (isToday) return 'Today, ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function googleMapsUrl(addr: string) {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`;
+}
+
+/**
+ * Maps the reservation record into a 0-4 lifecycle step:
+ * 0: Assigned (waiting for driver to accept)
+ * 1: Accepted (driver accepted the ride)
+ * 2: Arrived (driver arrived at pickup)
+ * 3: On Board (passenger picked up, ride in progress)
+ * 4: Completed (passenger dropped off, trip finished)
+ */
+function getTripStage(t: AssignedTrip): number {
+  const st = normalizeStatus(t.status);
+  if (st === 'completed' || t.driverStatus === 'dropped_off') return 4;
+  if (t.driverStatus === 'on_board') return 3;
+  if (t.driverStatus === 'arrived') return 2;
+  if (t.driverStatus === 'accepted') return 1;
+  return 0;
 }
 
 export function DriverBoard({
@@ -75,13 +118,26 @@ export function DriverBoard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Profile editing state.
+  // Tab & search filtering
+  const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'all' | 'settings'>('active');
+  const [search, setSearch] = useState('');
+
+  // Trip action progression state
+  const [actingTripId, setActingTripId] = useState('');
+  const [actionError, setActionError] = useState('');
+
+  // Notes state per trip
+  const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
+  const [savingNoteId, setSavingNoteId] = useState('');
+  const [savedNoteId, setSavedNoteId] = useState('');
+
+  // Profile editing state
   const [profile, setProfile] = useState({ name: '', phone: '', vehicle: 'sedan' });
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState('');
 
-  // Password change state.
+  // Password change state
   const [pw, setPw] = useState({ password: '', confirm: '' });
   const [savingPw, setSavingPw] = useState(false);
   const [pwSaved, setPwSaved] = useState(false);
@@ -95,6 +151,12 @@ export function DriverBoard({
         requestKey: null,
       });
       setTrips(records);
+      // Initialize notes draft from loaded trips
+      const initialNotes: Record<string, string> = {};
+      for (const r of records) {
+        if (r.driverNotes) initialNotes[r.id] = r.driverNotes;
+      }
+      setNotesDraft(initialNotes);
     } catch {
       setError('Couldn’t load your trips. Please sign in again.');
     }
@@ -110,7 +172,7 @@ export function DriverBoard({
         vehicle: rec.vehicle ?? 'sedan',
       });
     } catch {
-      // non-fatal — profile fields stay editable
+      // non-fatal
     }
   }
 
@@ -120,7 +182,7 @@ export function DriverBoard({
     void loadProfile();
   }, [driverId]);
 
-  // Realtime: keep the trip list live so new assignments appear instantly.
+  // Realtime: keep the trip list live so new assignments appear instantly
   useEffect(() => {
     void pb
       .collection('reservations')
@@ -139,18 +201,91 @@ export function DriverBoard({
     };
   }, []);
 
-  const sorted = useMemo(() => [...trips].sort(compareByPickup), [trips]);
+  /**
+   * Action handler: Accept, Arrive, Pick Up, Drop Off
+   */
+  async function handleTripAction(tripId: string, action: 'accept' | 'arrive' | 'pickup' | 'dropoff') {
+    if (actingTripId) return;
+    setActingTripId(tripId);
+    setActionError('');
 
-  const groups = useMemo(() => {
-    const map = new Map<string, { label: string; rows: AssignedTrip[] }>();
-    for (const t of sorted) {
-      const key = t.pickupAt || 'unscheduled';
-      const bucket = map.get(key) ?? { label: dayLabel(t.pickupAt), rows: [] };
-      bucket.rows.push(t);
-      map.set(key, bucket);
+    // Optimistic local update
+    const previous = trips.find((t) => t.id === tripId);
+    setTrips((prev) =>
+      prev.map((t) => {
+        if (t.id !== tripId) return t;
+        if (action === 'accept') {
+          return { ...t, driverStatus: 'accepted', status: t.status === 'pending' ? 'confirmed' : t.status };
+        }
+        if (action === 'arrive') {
+          return { ...t, driverStatus: 'arrived' };
+        }
+        if (action === 'pickup') {
+          return { ...t, driverStatus: 'on_board' };
+        }
+        if (action === 'dropoff') {
+          return { ...t, driverStatus: 'dropped_off', status: 'completed' };
+        }
+        return t;
+      })
+    );
+
+    try {
+      const res = await fetch('/api/driver-trip', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${pb.authStore.token}`,
+        },
+        body: JSON.stringify({ tripId, action }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to update trip status.');
+      }
+    } catch (err) {
+      // Revert optimistic update
+      if (previous) {
+        setTrips((prev) => prev.map((t) => (t.id === tripId ? previous : t)));
+      }
+      setActionError(err instanceof Error ? err.message : 'Could not update trip. Please try again.');
+    } finally {
+      setActingTripId('');
     }
-    return [...map.values()];
-  }, [sorted]);
+  }
+
+  /**
+   * Saves or updates a driver's note for a specific trip
+   */
+  async function handleSaveNote(tripId: string) {
+    if (savingNoteId) return;
+    setSavingNoteId(tripId);
+    const noteContent = (notesDraft[tripId] || '').trim();
+
+    try {
+      const res = await fetch('/api/driver-trip', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${pb.authStore.token}`,
+        },
+        body: JSON.stringify({ tripId, action: 'note', note: noteContent }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to save note.');
+      }
+      setTrips((prev) =>
+        prev.map((t) => (t.id === tripId ? { ...t, driverNotes: noteContent } : t))
+      );
+      setSavedNoteId(tripId);
+      window.setTimeout(() => setSavedNoteId(''), 2500);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not save note.');
+    } finally {
+      setSavingNoteId('');
+    }
+  }
 
   async function saveProfile(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -206,155 +341,571 @@ export function DriverBoard({
     navigate('/driver/login');
   }
 
+  // Filtered trips
+  const sorted = useMemo(() => [...trips].sort(compareByPickup), [trips]);
+
+  const stats = useMemo(() => {
+    const today = new Date();
+    let todayCount = 0;
+    let activeCount = 0;
+    let completedCount = 0;
+
+    for (const t of trips) {
+      const stage = getTripStage(t);
+      if (stage === 4) {
+        completedCount++;
+      } else {
+        activeCount++;
+      }
+      if (t.pickupAt) {
+        const d = new Date(t.pickupAt);
+        if (
+          d.getDate() === today.getDate() &&
+          d.getMonth() === today.getMonth() &&
+          d.getFullYear() === today.getFullYear()
+        ) {
+          todayCount++;
+        }
+      }
+    }
+    return {
+      total: trips.length,
+      active: activeCount,
+      completed: completedCount,
+      today: todayCount,
+    };
+  }, [trips]);
+
+  const filteredTrips = useMemo(() => {
+    let list = sorted;
+    if (activeTab === 'active') {
+      list = list.filter((t) => getTripStage(t) < 4);
+    } else if (activeTab === 'completed') {
+      list = list.filter((t) => getTripStage(t) === 4);
+    }
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        (t) =>
+          (t.name || '').toLowerCase().includes(q) ||
+          (t.pickup || '').toLowerCase().includes(q) ||
+          (t.dropoff || '').toLowerCase().includes(q) ||
+          (t.flight || '').toLowerCase().includes(q) ||
+          (t.sourceName || '').toLowerCase().includes(q) ||
+          (t.id || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [sorted, activeTab, search]);
+
   return (
     <main className="dashboard-page">
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <header className="dashboard-header">
         <a href="/" className="page-brand" style={{ textDecoration: 'none' }}>
-          <span className="brand-mark">B<span>L</span></span>
-          <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / DRIVER</span></span>
+          <span className="brand-mark">E<span>L</span></span>
+          <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / CHAUFFEUR</span></span>
         </a>
         <div className="dashboard-user">
-          <span>{driverEmail}</span>
+          <span className="driver-duty-badge">
+            <span className="driver-duty-dot" /> On Duty
+          </span>
+          <span style={{ fontWeight: 600 }}>{profile.name || driverEmail}</span>
           <ThemeToggle className="theme-toggle compact" />
-          <button type="button" className="dashboard-link" onClick={signOut}>Sign out</button>
+          <button type="button" className="dashboard-link" onClick={signOut}>
+            <LogOut size={14} style={{ display: 'inline', marginRight: 4 }} /> Sign out
+          </button>
         </div>
       </header>
+
       <div className="dashboard-shell">
         <div className="dashboard-intro">
-          <span className="eyebrow">DRIVER AREA</span>
-          <h1>Your assigned trips</h1>
+          <span className="eyebrow">CHAUFFEUR PORTAL</span>
+          <h1>Driver Mission Center</h1>
           <p>
-            Trips an operator assigns to you appear here in real time. You can read every detail —
-            pickup, dropoff, passenger contact, and notes — and manage your own profile and password.
+            Manage active assignments in real time. Accept trips, notify arrival, confirm passenger pickup,
+            complete drop-off, and add trip notes.
           </p>
         </div>
 
-        <div className="dashboard-grid">
-          <div className="dash-card">
-            <div className="dash-card-head">
-              <span className="dash-card-icon"><MapPin size={18} /></span>
-              <div>
-                <h2>Assigned trips</h2>
-                <p>{trips.length} trip{trips.length === 1 ? '' : 's'} assigned to you</p>
-              </div>
-            </div>
+        {/* Driver Summary Statistics Bar */}
+        <div className="driver-stats-grid">
+          <div className="driver-stat-card">
+            <span className="driver-stat-num">{stats.total}</span>
+            <span className="driver-stat-label">Assigned Trips</span>
+          </div>
+          <div className="driver-stat-card" style={{ borderLeft: '3px solid #2563eb' }}>
+            <span className="driver-stat-num" style={{ color: '#2563eb' }}>{stats.today}</span>
+            <span className="driver-stat-label">Today’s Schedule</span>
+          </div>
+          <div className="driver-stat-card" style={{ borderLeft: '3px solid #0284c7' }}>
+            <span className="driver-stat-num" style={{ color: '#0284c7' }}>{stats.active}</span>
+            <span className="driver-stat-label">Active / Pending</span>
+          </div>
+          <div className="driver-stat-card" style={{ borderLeft: '3px solid #16a34a' }}>
+            <span className="driver-stat-num" style={{ color: '#16a34a' }}>{stats.completed}</span>
+            <span className="driver-stat-label">Completed Rides</span>
+          </div>
+        </div>
 
+        {/* Filter and Tab Control Bar */}
+        <div className="driver-filter-bar">
+          <div className="driver-tab-group" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'active'}
+              className={`driver-tab-btn${activeTab === 'active' ? ' active' : ''}`}
+              onClick={() => setActiveTab('active')}
+            >
+              <Sparkles size={14} /> Active &amp; Upcoming
+              <span className="badge-pill">{stats.active}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'completed'}
+              className={`driver-tab-btn${activeTab === 'completed' ? ' active' : ''}`}
+              onClick={() => setActiveTab('completed')}
+            >
+              <CheckCircle2 size={14} /> Completed
+              <span className="badge-pill">{stats.completed}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'all'}
+              className={`driver-tab-btn${activeTab === 'all' ? ' active' : ''}`}
+              onClick={() => setActiveTab('all')}
+            >
+              All Trips
+              <span className="badge-pill">{stats.total}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'settings'}
+              className={`driver-tab-btn${activeTab === 'settings' ? ' active' : ''}`}
+              onClick={() => setActiveTab('settings')}
+            >
+              <Settings size={14} /> Profile &amp; Vehicle
+            </button>
+          </div>
+
+          {activeTab !== 'settings' && (
+            <div className="driver-search-wrap">
+              <Search size={15} />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search passenger, address, flight…"
+                aria-label="Search trips"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  style={{ position: 'absolute', right: 10, top: 10, border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--ink-light)' }}
+                  aria-label="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {actionError && (
+          <p className="form-error" role="alert" style={{ marginBottom: 16 }}>
+            {actionError}
+          </p>
+        )}
+
+        {/* Tab 1, 2, 3: Trips List */}
+        {activeTab !== 'settings' ? (
+          <div>
             {loading ? (
-              <div className="dash-loading"><Loader2 size={20} /> Loading your trips…</div>
+              <div className="dash-loading"><Loader2 size={20} /> Loading assigned trips…</div>
             ) : error ? (
               <p className="form-error" role="alert">{error}</p>
-            ) : trips.length === 0 ? (
-              <div className="reservations-empty">
-                <RefreshCw size={26} />
-                <p>No trips assigned to you yet. New assignments appear here automatically.</p>
+            ) : filteredTrips.length === 0 ? (
+              <div className="reservations-empty" style={{ padding: '48px 20px', background: '#fff', borderRadius: 16, border: '1px solid var(--border-ride)' }}>
+                <RefreshCw size={28} style={{ opacity: 0.5, marginBottom: 8 }} />
+                <p style={{ fontWeight: 600, color: 'var(--ink)' }}>
+                  {search ? 'No trips match your search.' : activeTab === 'completed' ? 'No completed trips yet.' : 'No active trips at this moment.'}
+                </p>
+                <small style={{ color: 'var(--ink-mid)' }}>New rides assigned by dispatch will appear here automatically.</small>
               </div>
             ) : (
-              <div className="reservations-list">
-                {groups.map((group) => (
-                  <div key={group.label} className="reservation-card">
-                    <div className="reservation-card-top">
-                      <div className="reservation-card-id">
-                        <strong>{group.label}</strong>
-                        <span className="reservation-ref">{group.rows.length} trip{group.rows.length === 1 ? '' : 's'}</span>
-                      </div>
-                    </div>
-                    {group.rows.map((t) => {
-                      const st = normalizeStatus(t.status);
-                      const round = Boolean(t.returnAt);
-                      return (
-                        <div key={t.id} className="driver-trip">
-                          <div className="driver-trip-head">
-                            <strong>{t.name || 'Unnamed guest'}</strong>
+              <div>
+                {filteredTrips.map((t) => {
+                  const stage = getTripStage(t);
+                  const st = normalizeStatus(t.status);
+                  const round = Boolean(t.returnAt);
+                  const isBusy = actingTripId === t.id;
+                  const isNoteBusy = savingNoteId === t.id;
+                  const isNoteSaved = savedNoteId === t.id;
+                  const currentDraft = notesDraft[t.id] ?? t.driverNotes ?? '';
+
+                  return (
+                    <article
+                      key={t.id}
+                      className={`driver-mission-item${stage > 0 && stage < 4 ? ' is-active' : ''}`}
+                    >
+                      {/* Mission Top Header */}
+                      <div className="driver-mission-top">
+                        <div>
+                          <h2 className="driver-guest-title">
+                            <User size={18} color="var(--blue)" />
+                            {t.name || 'Unnamed Guest'}
+                            {t.sourceName && (
+                              <span className="driver-brand-tag">{t.sourceName}</span>
+                            )}
+                          </h2>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 12, color: 'var(--ink-light)', fontWeight: 600 }}>
+                              REF: RB-{t.id.slice(-8).toUpperCase()}
+                            </span>
                             <StatusBadge value={st} />
                           </div>
-                          {t.sourceName && <p className="driver-trip-source">{t.sourceName}</p>}
-                          <div className="driver-trip-when">
-                            <strong>{clock(t.pickupAt)}</strong>
-                            <small>{t.pickupLocal || 'Time to confirm'}</small>
-                          </div>
-                          <div className="reservation-card-route">
-                            {t.pickup && (
-                              <span><span className="pickup-marker" /> {t.pickup}</span>
-                            )}
-                            {t.extraStop && (
-                              <span><span className="stop-marker" /> {t.extraStop}</span>
-                            )}
-                            {t.dropoff && (
-                              <span><span className="dropoff-marker mini" /> {t.dropoff}</span>
-                            )}
-                          </div>
-                          <div className="reservation-card-meta">
-                            {t.vehicle && <span><CarFront size={14} /> {vehicles.find(v => v.id === t.vehicle)?.name ?? t.vehicle}</span>}
-                            {t.passengers > 0 && <span><Users size={14} /> {t.passengers}</span>}
-                            {round && <span><RefreshCw size={14} /> Round trip</span>}
-                            {t.flight && <span><Plane size={14} /> {t.flight}</span>}
-                            {t.carSeat && <span><Baby size={14} /> Car seat</span>}
-                            {t.insidePickup && <span><DoorOpen size={14} /> Inside pickup</span>}
-                            {t.phone && <a href={`tel:${t.phone.replace(/[^\d+]/g, '')}`}>Call {t.phone}</a>}
-                          </div>
-                          {t.notes && <p className="driver-trip-notes">{t.notes}</p>}
                         </div>
-                      );
-                    })}
-                  </div>
-                ))}
+
+                        {/* Pickup Time & Date Chip */}
+                        <div className="driver-time-chip">
+                          <Clock size={16} color="var(--blue)" />
+                          <strong>{clock(t.pickupAt)}</strong>
+                          <small>{dayLabel(t.pickupAt)}</small>
+                        </div>
+                      </div>
+
+                      {/* Route Section with Instant Google Maps Navigation */}
+                      <div className="reservation-card-route" style={{ margin: 0 }}>
+                        {t.pickup && (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                            <span>
+                              <span className="pickup-marker" /> <strong>Pickup:</strong> {t.pickup}
+                            </span>
+                            <a
+                              href={googleMapsUrl(t.pickup)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="driver-tool-btn"
+                              title="Navigate to Pickup"
+                            >
+                              <Navigation size={13} color="#2563eb" /> Navigate
+                            </a>
+                          </div>
+                        )}
+                        {t.extraStop && (
+                          <div>
+                            <span className="stop-marker" /> <strong>Extra stop:</strong> {t.extraStop}
+                          </div>
+                        )}
+                        {t.dropoff && (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+                            <span>
+                              <span className="dropoff-marker mini" /> <strong>Dropoff:</strong> {t.dropoff}
+                            </span>
+                            <a
+                              href={googleMapsUrl(t.dropoff)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="driver-tool-btn"
+                              title="Navigate to Dropoff"
+                            >
+                              <Navigation size={13} color="#16a34a" /> Navigate
+                            </a>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Meta Information (Vehicle, Passenger count, Phone, Flight, Special Requests) */}
+                      <div className="reservation-card-meta" style={{ margin: 0, gap: 10 }}>
+                        {t.vehicle && (
+                          <span>
+                            <CarFront size={14} /> {vehicles.find((v) => v.id === t.vehicle)?.name ?? t.vehicle}
+                          </span>
+                        )}
+                        {t.passengers > 0 && <span><Users size={14} /> {t.passengers} passengers</span>}
+                        {round && <span><RefreshCw size={14} /> Round trip</span>}
+                        {t.flight && (
+                          <a
+                            href={`https://www.google.com/search?q=${encodeURIComponent(t.flight + ' flight status')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="driver-tool-btn"
+                            style={{ padding: '3px 8px', fontSize: 11 }}
+                          >
+                            <Plane size={13} /> Flight {t.flight}
+                          </a>
+                        )}
+                        {t.carSeat && <span style={{ color: '#b45309' }}><Baby size={14} /> Car seat required</span>}
+                        {t.insidePickup && <span style={{ color: '#2563eb' }}><DoorOpen size={14} /> Inside pickup / Meet &amp; Greet</span>}
+                        {t.phone && (
+                          <a
+                            href={`tel:${t.phone.replace(/[^\d+]/g, '')}`}
+                            className="driver-tool-btn"
+                            style={{ color: '#1d4ed8', fontWeight: 800 }}
+                          >
+                            <Phone size={13} /> Call {t.phone}
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Customer / Dispatch Notes if present */}
+                      {t.notes && (
+                        <div style={{ fontSize: 12, background: '#f8fafc', padding: '10px 14px', borderRadius: 10, border: '1px solid #e2e8f0', color: 'var(--ink-mid)' }}>
+                          <strong style={{ color: 'var(--ink)', display: 'block', marginBottom: 2 }}>Passenger Instructions:</strong>
+                          {t.notes}
+                        </div>
+                      )}
+
+                      {/* 4-Step Interactive Chauffeur Workflow Pipeline */}
+                      <div className="driver-pipeline-container">
+                        <div className={`driver-pipe-step${stage >= 1 ? ' done' : stage === 0 ? ' current' : ''}`}>
+                          <span className="driver-pipe-num">{stage >= 1 ? '✓' : '1'}</span>
+                          <span>Accept Ride</span>
+                        </div>
+                        <div className={`driver-pipe-divider${stage >= 1 ? ' done' : ''}`} />
+
+                        <div className={`driver-pipe-step${stage >= 2 ? ' done' : stage === 1 ? ' current' : ''}`}>
+                          <span className="driver-pipe-num">{stage >= 2 ? '✓' : '2'}</span>
+                          <span>Arrived</span>
+                        </div>
+                        <div className={`driver-pipe-divider${stage >= 2 ? ' done' : ''}`} />
+
+                        <div className={`driver-pipe-step${stage >= 3 ? ' done' : stage === 2 ? ' current' : ''}`}>
+                          <span className="driver-pipe-num">{stage >= 3 ? '✓' : '3'}</span>
+                          <span>On Board</span>
+                        </div>
+                        <div className={`driver-pipe-divider${stage >= 3 ? ' done' : ''}`} />
+
+                        <div className={`driver-pipe-step${stage === 4 ? ' done' : stage === 3 ? ' current' : ''}`}>
+                          <span className="driver-pipe-num">{stage === 4 ? '✓' : '4'}</span>
+                          <span>Drop Off</span>
+                        </div>
+                      </div>
+
+                      {/* Driver Action Control Buttons */}
+                      <div className="driver-actions-bar">
+                        {stage === 0 && (
+                          <button
+                            type="button"
+                            className="driver-primary-btn btn-accept"
+                            disabled={isBusy}
+                            onClick={() => handleTripAction(t.id, 'accept')}
+                          >
+                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={2.5} />}
+                            Accept Ride
+                          </button>
+                        )}
+
+                        {stage === 1 && (
+                          <button
+                            type="button"
+                            className="driver-primary-btn btn-arrive"
+                            disabled={isBusy}
+                            onClick={() => handleTripAction(t.id, 'arrive')}
+                          >
+                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} strokeWidth={2.5} />}
+                            I’ve Arrived at Pickup
+                          </button>
+                        )}
+
+                        {stage === 2 && (
+                          <button
+                            type="button"
+                            className="driver-primary-btn btn-pickup"
+                            disabled={isBusy}
+                            onClick={() => handleTripAction(t.id, 'pickup')}
+                          >
+                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} strokeWidth={2.5} />}
+                            Pick Up Passenger (On Board)
+                          </button>
+                        )}
+
+                        {stage === 3 && (
+                          <button
+                            type="button"
+                            className="driver-primary-btn btn-dropoff"
+                            disabled={isBusy}
+                            onClick={() => handleTripAction(t.id, 'dropoff')}
+                          >
+                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Flag size={16} strokeWidth={2.5} />}
+                            Drop Off Passenger (Complete Trip)
+                          </button>
+                        )}
+
+                        {stage === 4 && (
+                          <div className="driver-primary-btn btn-done">
+                            <CheckCircle2 size={18} /> Ride Completed
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Dedicated Driver Trip Notes Area (Şoför Notu Bölümü) */}
+                      <div className="driver-note-box">
+                        <div className="driver-note-head">
+                          <span>Driver Trip Notes &amp; Summary</span>
+                          {t.driverNotes && (
+                            <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 700 }}>
+                              ✓ Saved on Record
+                            </span>
+                          )}
+                        </div>
+
+                        {t.driverNotes && (
+                          <div className="driver-notes-history">
+                            {t.driverNotes}
+                          </div>
+                        )}
+
+                        <textarea
+                          className="driver-note-textarea"
+                          rows={2}
+                          value={currentDraft}
+                          onChange={(e) =>
+                            setNotesDraft((prev) => ({ ...prev, [t.id]: e.target.value }))
+                          }
+                          placeholder={
+                            stage === 4
+                              ? 'Add drop-off notes (e.g. passenger safely dropped off at Terminal 4, toll receipt $15.50, smooth trip)...'
+                              : 'Add notes about this ride (toll fees, luggage count, special requests, passenger comments)...'
+                          }
+                        />
+
+                        <button
+                          type="button"
+                          className={`driver-note-save-btn${isNoteSaved ? ' saved' : ''}`}
+                          disabled={isNoteBusy}
+                          onClick={() => handleSaveNote(t.id)}
+                        >
+                          {isNoteBusy ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : isNoteSaved ? (
+                            <Check size={13} strokeWidth={3} />
+                          ) : (
+                            <Save size={13} />
+                          )}
+                          {isNoteSaved ? 'Saved!' : isNoteBusy ? 'Saving…' : 'Save Driver Note'}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             )}
           </div>
-
-          <div className="dashboard-side">
+        ) : (
+          /* Tab 4: Driver Profile & Vehicle Settings */
+          <div className="dashboard-grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
             <form className="dash-card" onSubmit={saveProfile}>
               <div className="dash-card-head">
                 <span className="dash-card-icon"><Users size={18} /></span>
                 <div>
-                  <h2>Your profile</h2>
-                  <p>Visible to operators who assign trips.</p>
+                  <h2>Your Chauffeur Profile</h2>
+                  <p>Visible to central dispatch when assigning trips.</p>
                 </div>
               </div>
               <label className="input-label">Full name
-                <input className="standard-input" type="text" value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))} />
+                <input
+                  className="standard-input"
+                  type="text"
+                  value={profile.name}
+                  onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
+                />
               </label>
-              <label className="input-label" style={{ marginTop: 13 }}>Phone
-                <input className="standard-input" type="tel" value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} />
+              <label className="input-label" style={{ marginTop: 13 }}>Phone number
+                <input
+                  className="standard-input"
+                  type="tel"
+                  value={profile.phone}
+                  onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
+                />
               </label>
-              <label className="input-label" style={{ marginTop: 13 }}>Preferred vehicle
-                <select className="standard-input" value={profile.vehicle} onChange={e => setProfile(p => ({ ...p, vehicle: e.target.value as Vehicle }))}>
-                  {vehicles.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              <label className="input-label" style={{ marginTop: 13 }}>Preferred Vehicle
+                <select
+                  className="standard-input"
+                  value={profile.vehicle}
+                  onChange={(e) => setProfile((p) => ({ ...p, vehicle: e.target.value as Vehicle }))}
+                >
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} ({v.capacity} passengers)
+                    </option>
+                  ))}
                 </select>
               </label>
-              {profileError && <p className="form-error" role="alert" style={{ marginTop: 13 }}>{profileError}</p>}
-              <div className="dash-actions">
+              {profileError && (
+                <p className="form-error" role="alert" style={{ marginTop: 13 }}>
+                  {profileError}
+                </p>
+              )}
+              <div className="dash-actions" style={{ marginTop: 18 }}>
                 <button type="submit" className="primary-button" disabled={savingProfile}>
-                  {savingProfile ? 'Saving…' : <>{profileSaved ? <Check size={17} /> : <Save size={17} />} {profileSaved ? 'Saved' : 'Save profile'}</>}
+                  {savingProfile ? (
+                    'Saving…'
+                  ) : (
+                    <>
+                      {profileSaved ? <Check size={17} /> : <Save size={17} />}
+                      {profileSaved ? 'Profile Saved' : 'Save Profile'}
+                    </>
+                  )}
                 </button>
               </div>
             </form>
 
             <form className="dash-card" onSubmit={savePassword}>
               <div className="dash-card-head">
-                <span className="dash-card-icon"><LogOut size={18} /></span>
+                <span className="dash-card-icon"><LockKeyhole size={18} /></span>
                 <div>
-                  <h2>Change password</h2>
-                  <p>Choose and control your own password.</p>
+                  <h2>Security &amp; Password</h2>
+                  <p>Choose and control your private password.</p>
                 </div>
               </div>
               <label className="input-label">New password
-                <input className="standard-input" type="password" autoComplete="new-password" minLength={8} value={pw.password} onChange={e => setPw(p => ({ ...p, password: e.target.value }))} />
+                <input
+                  className="standard-input"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={pw.password}
+                  onChange={(e) => setPw((p) => ({ ...p, password: e.target.value }))}
+                />
               </label>
               <label className="input-label" style={{ marginTop: 13 }}>Confirm new password
-                <input className="standard-input" type="password" autoComplete="new-password" minLength={8} value={pw.confirm} onChange={e => setPw(p => ({ ...p, confirm: e.target.value }))} />
+                <input
+                  className="standard-input"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={pw.confirm}
+                  onChange={(e) => setPw((p) => ({ ...p, confirm: e.target.value }))}
+                />
               </label>
-              {pwError && <p className="form-error" role="alert" style={{ marginTop: 13 }}>{pwError}</p>}
-              <div className="dash-actions">
+              {pwError && (
+                <p className="form-error" role="alert" style={{ marginTop: 13 }}>
+                  {pwError}
+                </p>
+              )}
+              <div className="dash-actions" style={{ marginTop: 18 }}>
                 <button type="submit" className="primary-button" disabled={savingPw}>
-                  {savingPw ? 'Updating…' : <>{pwSaved ? <Check size={17} /> : <Save size={17} />} {pwSaved ? 'Updated' : 'Update password'}</>}
+                  {savingPw ? (
+                    'Updating…'
+                  ) : (
+                    <>
+                      {pwSaved ? <Check size={17} /> : <Save size={17} />}
+                      {pwSaved ? 'Password Updated' : 'Update Password'}
+                    </>
+                  )}
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        )}
       </div>
     </main>
   );

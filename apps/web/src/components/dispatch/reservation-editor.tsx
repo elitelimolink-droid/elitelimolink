@@ -46,6 +46,8 @@ export type ReservationRecord = {
   sourceName: string;
   // Optional driver assigned to this trip (id of a `drivers` record).
   driver: string;
+  driverStatus?: string;
+  driverNotes?: string;
   created: string;
   updated: string;
 };
@@ -370,6 +372,18 @@ export function ReservationEditor({
                 ))}
               </select>
             </label>
+
+            {reservation.driverStatus && (
+              <div style={{ margin: '6px 0 10px', padding: '6px 12px', background: '#eef4ff', borderRadius: 8, fontSize: 12, color: 'var(--blue)', fontWeight: 700 }}>
+                Chauffeur status: {reservation.driverStatus.replace('_', ' ').toUpperCase()}
+              </div>
+            )}
+            {reservation.driverNotes && (
+              <div style={{ margin: '6px 0 10px', padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, color: 'var(--ink)' }}>
+                <strong style={{ display: 'block', marginBottom: 2, color: 'var(--ink)' }}>Chauffeur note:</strong>
+                {reservation.driverNotes}
+              </div>
+            )}
 
             <div className="editor-add-ons">
               <span className="editor-add-ons-label">Optional add-ons <span className="optional">extra charge</span></span>
