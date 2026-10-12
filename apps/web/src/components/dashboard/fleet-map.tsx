@@ -583,7 +583,7 @@ export function FleetMap({
       <div className="fleet-view-head">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div className="fleet-live-pulse" />
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Live Driver Drive View</h2>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Elite Limo Link • Live Driver View</h2>
           <span className="driver-brand-tag" style={{ background: '#e0f2fe', color: '#0369a1', borderColor: '#bae6fd' }}>
             {liveGpsCount} Live GPS • {drivers.length - liveGpsCount} Standby ({drivers.length} Visible)
           </span>

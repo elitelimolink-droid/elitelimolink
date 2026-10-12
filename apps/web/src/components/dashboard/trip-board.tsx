@@ -643,10 +643,15 @@ export function TripBoard({
   return (
     <div className="trip-dash">
       <header className="trip-top">
-        <button type="button" className="trip-icon-btn" aria-label="Open menu" onClick={() => setMenuOpen(true)}>
-          <Menu size={26} strokeWidth={2.25} />
-        </button>
-        <h1>Dashboard</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button type="button" className="trip-icon-btn" aria-label="Open menu" onClick={() => setMenuOpen(true)}>
+            <Menu size={26} strokeWidth={2.25} />
+          </button>
+          <div>
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.08em', color: '#2563eb', textTransform: 'uppercase', display: 'block', lineHeight: 1 }}>Elite Limo Link</span>
+            <h1 style={{ margin: 0, fontSize: 19, lineHeight: 1.2 }}>Dashboard</h1>
+          </div>
+        </div>
         <div className="trip-top-actions">
           <ThemeToggle className="trip-icon-btn" label="Toggle day or night mode" />
           <button
@@ -768,7 +773,7 @@ export function TripBoard({
                         className={business === b.name ? 'on' : ''}
                         onClick={() => { setBusiness(b.name); setSelectedBusinessId(b.id); setBizMenuOpen(false); }}
                       >
-                        <span>{b.name}</span>
+                        <span>{b.name.toUpperCase() === 'ELITELIMOLINK' ? 'Elite Limo Link' : b.name}</span>
                         <em>{b.count}</em>
                       </button>
                     ))}
@@ -1006,7 +1011,14 @@ export function TripBoard({
             <button type="button" onClick={() => { setPanel('drivers'); setMenuOpen(false); }}>Drivers</button>
             <Link to="/dispatch" onClick={() => setMenuOpen(false)}>Dispatch center</Link>
             <Link to="/driver" onClick={() => setMenuOpen(false)}>Driver portal</Link>
-            <Link to="/">Booking site</Link>
+            <Link to="/" onClick={() => setMenuOpen(false)}>Elite Limo Link</Link>
+            {businesses
+              .filter((b) => b.businessName && !b.businessName.toLowerCase().includes('elitelimolink') && b.id !== userId)
+              .map((b) => (
+                <Link key={b.id} to={getBizLink(b, false)} onClick={() => setMenuOpen(false)}>
+                  {b.businessName}
+                </Link>
+              ))}
             <button type="button" className="trip-signout" onClick={signOut}>Sign out</button>
           </nav>
         </div>
@@ -1141,7 +1153,8 @@ export function TripBoard({
                 // Registered name is the primary identifier. Fall back to the
                 // account email, then a placeholder, so every business entry is
                 // always visible — even one whose settings row is still seeding.
-                const displayName = (b.businessName || '').trim() || b.email || 'Unnamed business';
+                const rawName = (b.businessName || '').trim();
+                const displayName = rawName.toUpperCase() === 'ELITELIMOLINK' ? 'Elite Limo Link' : rawName || b.email || 'Unnamed business';
                 const link = getBizLink(b, isOwn);
                 return (
                   <li
