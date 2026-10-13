@@ -1,1 +1,0 @@
-import{w as a}from"./components-BXvrpWac.js";import{j as r}from"./jsx-runtime-u17CrQMm.js";import"./utils-CRKigPxt.js";const l=a(function(){return r.jsx("div",{className:"dashboard-loading"})});export{l as HydrateFallback};

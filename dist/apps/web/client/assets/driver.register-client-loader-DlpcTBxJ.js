@@ -1,1 +1,0 @@
-import{r as t}from"./utils-CRKigPxt.js";import{p as r}from"./pocketbase-client-CicLDX7G.js";function o(){const e=r.authStore.record;if(r.authStore.isValid&&e?.collectionName==="drivers")throw t("/driver");return null}o.hydrate=!0;export{o as clientLoader};
