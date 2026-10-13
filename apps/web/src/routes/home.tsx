@@ -21,8 +21,8 @@ export async function loader({ request, url, params }: Route.LoaderArgs) {
   const searchBiz = url.searchParams.get('biz');
   const slug = (params as Record<string, string | undefined>)?.bizSlug;
 
-  // ELITELIMOLINK domain is strictly for chauffeurs: redirect directly to /driver
-  if (host.includes('elitelimolink') || (!slug && !searchBiz && !host.includes('.'))) {
+  // Bare ELITELIMOLINK root domain (with no ?biz= or /:bizSlug) is for chauffeurs: redirect to /driver
+  if (!slug && !searchBiz && (host.includes('elitelimolink') || !host.includes('.'))) {
     return redirect('/driver');
   }
 
@@ -54,12 +54,19 @@ export async function loader({ request, url, params }: Route.LoaderArgs) {
   return { businessName, bizId };
 }
 
-// Keep chauffeurs isolated to driver portal: redirect root domain and drivers to /driver
+// Keep chauffeurs isolated to driver portal: redirect bare root domain and signed-in drivers to /driver
 export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
   if (typeof window !== 'undefined') {
     const host = window.location.hostname.toLowerCase();
-    const isCustomBiz = window.location.search.includes('biz=') || host.includes('teterboro') || host.includes('alpine');
-    if (host.includes('elitelimolink') || !isCustomBiz) {
+    const hasPathSlug = window.location.pathname !== '/' && window.location.pathname !== '';
+    const isCustomBiz =
+      window.location.search.includes('biz=') ||
+      hasPathSlug ||
+      host.includes('laguardia') ||
+      host.includes('teterboro') ||
+      host.includes('alpine') ||
+      (!host.includes('elitelimolink') && host.includes('.'));
+    if (!isCustomBiz) {
       throw redirect('/driver');
     }
   }
@@ -83,8 +90,15 @@ export default function HomePage({ loaderData }: Route.ComponentProps) {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const host = window.location.hostname.toLowerCase();
-      const isCustomBiz = window.location.search.includes('biz=') || host.includes('teterboro') || host.includes('alpine');
-      if (host.includes('elitelimolink') || !isCustomBiz) {
+      const hasPathSlug = window.location.pathname !== '/' && window.location.pathname !== '';
+      const isCustomBiz =
+        window.location.search.includes('biz=') ||
+        hasPathSlug ||
+        host.includes('laguardia') ||
+        host.includes('teterboro') ||
+        host.includes('alpine') ||
+        (!host.includes('elitelimolink') && host.includes('.'));
+      if (!isCustomBiz) {
         window.location.replace('/driver');
       }
     }

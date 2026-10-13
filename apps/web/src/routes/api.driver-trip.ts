@@ -15,6 +15,7 @@ type ReservationRecord = {
   owner?: string;
   pickup?: string;
   dropoff?: string;
+  pickupAt?: string;
   sourceName?: string;
 };
 
@@ -216,10 +217,18 @@ export const action = withApi(async ({ request }) => {
   let automatedSmsText = '';
 
   const guestName = trip.name || 'Guest';
+  const pickupMs = trip.pickupAt ? new Date(trip.pickupAt).getTime() : NaN;
+  const minutesUntilPickup = Number.isNaN(pickupMs) ? null : (pickupMs - Date.now()) / 60000;
 
   switch (body.action) {
     case 'accept':
     case 'on_the_way':
+      if (minutesUntilPickup !== null && minutesUntilPickup > 60) {
+        return apiError(
+          422,
+          'The "On the Way" status can only be updated starting 1 hour (60 minutes) before the pickup time.'
+        );
+      }
       patch.driverStatus = 'on_the_way';
       if (!trip.status || trip.status === 'pending') {
         patch.status = 'confirmed';
@@ -232,6 +241,12 @@ export const action = withApi(async ({ request }) => {
       break;
 
     case 'arrive':
+      if (minutesUntilPickup !== null && minutesUntilPickup > 25) {
+        return apiError(
+          422,
+          'The "Arrived" status can only be updated within the final 25 minutes before the pickup time.'
+        );
+      }
       patch.driverStatus = 'arrived';
       automatedSmsText = 'Your driver has arrived.';
       activityLabel = `Driver ${caller.name} arrived at pickup location for ${guestName} — Automated SMS sent: "${automatedSmsText}"`;

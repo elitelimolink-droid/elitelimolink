@@ -9,7 +9,6 @@ import {
   Clock,
   Compass,
   DoorOpen,
-  ExternalLink,
   Flag,
   Loader2,
   LockKeyhole,
@@ -69,6 +68,26 @@ export type AssignedTrip = {
   sourceName: string;
 };
 
+type WakeLockSentinelLike = {
+  release: () => Promise<void>;
+  addEventListener: (type: string, listener: () => void) => void;
+};
+
+type NavigatorWithWakeLock = Navigator & {
+  wakeLock?: {
+    request?: (type: 'screen') => Promise<WakeLockSentinelLike>;
+  };
+};
+
+export type TripTimeWindow = {
+  minutesUntilPickup: number | null;
+  canUpdateOnTheWay: boolean;
+  canUpdateArrived: boolean;
+  onTheWayWaitLabel: string;
+  arrivedWaitLabel: string;
+  pickupCountdownLabel: string;
+};
+
 function clock(iso: string) {
   if (!iso) return 'TBD';
   const d = new Date(iso);
@@ -87,6 +106,81 @@ function dayLabel(iso: string) {
     d.getFullYear() === today.getFullYear();
   if (isToday) return 'Today, ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function formatDurationMinutes(mins: number): string {
+  const rounded = Math.max(1, Math.ceil(mins));
+  if (rounded < 60) return `${rounded} min`;
+  const h = Math.floor(rounded / 60);
+  const m = rounded % 60;
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    const remH = h % 24;
+    return remH > 0 ? `${d}d ${remH}h` : `${d}d`;
+  }
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+/**
+ * Evaluates time-window rules for a reservation's scheduled pickup time:
+ * - "On the Way" can only be updated starting 1 hour (60 minutes) before pickupAt.
+ * - "Arrived" can only be updated within the final 25 minutes before pickupAt.
+ */
+function getTripTimeWindow(pickupAt: string, nowMs: number): TripTimeWindow {
+  if (!pickupAt) {
+    return {
+      minutesUntilPickup: null,
+      canUpdateOnTheWay: true,
+      canUpdateArrived: true,
+      onTheWayWaitLabel: 'Available now',
+      arrivedWaitLabel: 'Available now',
+      pickupCountdownLabel: 'Schedule TBD',
+    };
+  }
+  const pickupMs = new Date(pickupAt).getTime();
+  if (Number.isNaN(pickupMs)) {
+    return {
+      minutesUntilPickup: null,
+      canUpdateOnTheWay: true,
+      canUpdateArrived: true,
+      onTheWayWaitLabel: 'Available now',
+      arrivedWaitLabel: 'Available now',
+      pickupCountdownLabel: 'Schedule TBD',
+    };
+  }
+
+  const minutesUntilPickup = (pickupMs - nowMs) / 60000;
+  const canUpdateOnTheWay = minutesUntilPickup <= 60;
+  const canUpdateArrived = minutesUntilPickup <= 25;
+
+  const onTheWayWaitMins = Math.max(0, minutesUntilPickup - 60);
+  const arrivedWaitMins = Math.max(0, minutesUntilPickup - 25);
+
+  const onTheWayWaitLabel = canUpdateOnTheWay
+    ? 'Window Open (≤ 1 hr before pickup)'
+    : `Unlocks in ${formatDurationMinutes(onTheWayWaitMins)} (1 hr before pickup)`;
+
+  const arrivedWaitLabel = canUpdateArrived
+    ? 'Window Open (≤ 25 min before pickup)'
+    : `Unlocks in ${formatDurationMinutes(arrivedWaitMins)} (25 min before pickup)`;
+
+  let pickupCountdownLabel = '';
+  if (minutesUntilPickup > 0) {
+    pickupCountdownLabel = `Pickup in ${formatDurationMinutes(minutesUntilPickup)}`;
+  } else if (minutesUntilPickup >= -90) {
+    pickupCountdownLabel = 'Pickup Window Active';
+  } else {
+    pickupCountdownLabel = 'Past Scheduled Pickup';
+  }
+
+  return {
+    minutesUntilPickup,
+    canUpdateOnTheWay,
+    canUpdateArrived,
+    onTheWayWaitLabel,
+    arrivedWaitLabel,
+    pickupCountdownLabel,
+  };
 }
 
 function googleMapsUrl(addr: string) {
@@ -139,6 +233,16 @@ export function DriverBoard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Live clock tick (every 15 seconds) so 60-min and 25-min windows unlock automatically
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   // Tab & search filtering - Drive View HUD is permanently open and default
   const [activeTab, setActiveTab] = useState<'active' | 'drive' | 'completed' | 'all' | 'settings'>('drive');
   const [search, setSearch] = useState('');
@@ -165,7 +269,9 @@ export function DriverBoard({
       try {
         const raw = localStorage.getItem('ell_driver_sms_log');
         if (raw) return JSON.parse(raw);
-      } catch {}
+      } catch {
+        // ignore storage errors
+      }
     }
     return {};
   });
@@ -182,7 +288,9 @@ export function DriverBoard({
             return { lat: parsed.lat, lng: parsed.lng, speed: parsed.speed || 0, heading: parsed.heading || 0 };
           }
         }
-      } catch {}
+      } catch {
+        // ignore storage errors
+      }
     }
     return null;
   });
@@ -280,6 +388,9 @@ export function DriverBoard({
 
   /**
    * Action handler: On the Way (Accept), Arrive, Pick Up, Drop Off
+   * Enforces pickup time windows:
+   * - On the Way: only starting 1 hour (60 minutes) before pickupAt
+   * - Arrived: only within the final 25 minutes before pickupAt
    * Automatically dispatches customer SMS notifications:
    * - On the Way -> "Your driver is on the way."
    * - Arrived -> "Your driver has arrived."
@@ -289,10 +400,27 @@ export function DriverBoard({
     action: 'accept' | 'on_the_way' | 'arrive' | 'pickup' | 'dropoff'
   ) {
     if (actingTripId) return;
-    setActingTripId(tripId);
     setActionError('');
 
     const previous = trips.find((t) => t.id === tripId);
+    if (previous) {
+      const tw = getTripTimeWindow(previous.pickupAt, Date.now());
+      if ((action === 'accept' || action === 'on_the_way') && !tw.canUpdateOnTheWay) {
+        setActionError(
+          `“On the Way” status can only be updated starting 1 hour before pickup (${tw.onTheWayWaitLabel}).`
+        );
+        return;
+      }
+      if (action === 'arrive' && !tw.canUpdateArrived) {
+        setActionError(
+          `“Arrived” status can only be updated within the final 25 minutes before pickup (${tw.arrivedWaitLabel}).`
+        );
+        return;
+      }
+    }
+
+    setActingTripId(tripId);
+
     const customerName = previous?.name || 'Customer';
     const customerPhone = previous?.phone || '';
     const sentStamp = new Date().toLocaleTimeString('en-US', {
@@ -347,7 +475,9 @@ export function DriverBoard({
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem('ell_driver_sms_log', JSON.stringify(next));
-          } catch {}
+          } catch {
+            // ignore storage errors
+          }
         }
         return next;
       });
@@ -403,7 +533,9 @@ export function DriverBoard({
                 });
               }
             }
-          } catch {}
+          } catch {
+            // non-fatal
+          }
         })();
       }
     } catch (err) {
@@ -537,7 +669,9 @@ export function DriverBoard({
             'ell_last_driver_coords',
             JSON.stringify({ lat, lng, speed: speedMph, heading, updatedAt: Date.now() })
           );
-        } catch {}
+        } catch {
+          // ignore storage errors
+        }
       }
       await fetch('/api/driver-location', {
         method: 'POST',
@@ -561,14 +695,15 @@ export function DriverBoard({
 
   // Screen Wake Lock: Keeps the chauffeur's phone screen awake while driving
   useEffect(() => {
-    let wakeLockSentinel: any = null;
+    let wakeLockSentinel: WakeLockSentinelLike | null = null;
     let isMounted = true;
 
     async function enableWakeLock() {
       if (typeof window === 'undefined') return;
       try {
-        if ('wakeLock' in navigator && (navigator as any).wakeLock?.request) {
-          wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+        const nav = navigator as NavigatorWithWakeLock;
+        if (nav.wakeLock?.request) {
+          wakeLockSentinel = await nav.wakeLock.request('screen');
           if (isMounted) setScreenAwake(true);
           wakeLockSentinel.addEventListener('release', () => {
             if (isMounted) setScreenAwake(false);
@@ -581,14 +716,12 @@ export function DriverBoard({
 
     void enableWakeLock();
 
-    // Acquire on first touch/tap if browser requires user gesture
     function onUserGesture() {
       void enableWakeLock();
     }
     window.addEventListener('pointerdown', onUserGesture, { once: true });
     window.addEventListener('touchstart', onUserGesture, { once: true });
 
-    // Re-acquire wake lock and trigger GPS broadcast when phone screen turns on / unlocks
     function onWakeOrFocus() {
       if (document.visibilityState === 'visible') {
         void enableWakeLock();
@@ -609,11 +742,13 @@ export function DriverBoard({
       window.removeEventListener('pageshow', onWakeOrFocus);
       try {
         if (wakeLockSentinel) void wakeLockSentinel.release();
-      } catch {}
+      } catch {
+        // ignore release errors
+      }
     };
   }, []);
 
-  // Background GPS Heartbeat Worker: Keeps live GPS streaming even if tab/phone is backgrounded or screen sleeps
+  // Background GPS Heartbeat Worker: Keeps live GPS streaming even if tab/phone is backgrounded
   useEffect(() => {
     if (typeof window === 'undefined' || typeof Worker === 'undefined') return;
 
@@ -642,7 +777,9 @@ export function DriverBoard({
         void broadcastCurrentOrPickup();
       };
       worker.postMessage('start');
-    } catch {}
+    } catch {
+      // ignore worker errors
+    }
 
     return () => {
       if (worker) {
@@ -673,7 +810,6 @@ export function DriverBoard({
         void reportDriverGps(lat, lng, heading, speedMph);
       },
       async () => {
-        // Fallback to active ride pickup address or fleet base
         const targetAddr = activeRide?.pickup || sorted[0]?.pickup;
         if (targetAddr) {
           try {
@@ -687,9 +823,10 @@ export function DriverBoard({
                 return;
               }
             }
-          } catch {}
+          } catch {
+            // ignore geocode fallback errors
+          }
         }
-        // Base fallback: Teterboro Hub
         setLastCoords({ lat: 40.8501, lng: -74.0608, speed: 0, heading: 0 });
         setGpsStatus('standby');
         void reportDriverGps(40.8501, -74.0608, 0, 0);
@@ -732,14 +869,11 @@ export function DriverBoard({
         return;
       }
 
-      // If high accuracy failed with "Location unavailable" or TIMEOUT,
-      // fall back to standard/Wi-Fi/IP location
       navigator.geolocation.getCurrentPosition(
         handlePosition,
         () => {
           if (!isMounted) return;
           setGpsStatus('standby');
-          // If active trip exists and no coords set yet, geocode pickup
           if (activeRide?.pickup && !lastCoords) {
             void (async () => {
               try {
@@ -751,7 +885,9 @@ export function DriverBoard({
                     void reportDriverGps(data.lat, data.lng, 0, 0);
                   }
                 }
-              } catch {}
+              } catch {
+                // ignore geocode fallback error
+              }
             })();
           }
         },
@@ -759,7 +895,6 @@ export function DriverBoard({
       );
     }
 
-    // High accuracy watch
     const watchId = navigator.geolocation.watchPosition(
       handlePosition,
       handleGpsError,
@@ -770,7 +905,6 @@ export function DriverBoard({
       }
     );
 
-    // Periodic heartbeat every 12 seconds with low-accuracy fallback
     const intervalId = window.setInterval(() => {
       navigator.geolocation.getCurrentPosition(
         handlePosition,
@@ -846,6 +980,15 @@ export function DriverBoard({
     return list;
   }, [sorted, activeTab, search]);
 
+  const gpsLabel =
+    gpsStatus === 'active'
+      ? 'GPS Live'
+      : gpsStatus === 'standby'
+      ? 'GPS Standby'
+      : gpsStatus === 'denied'
+      ? 'GPS Blocked'
+      : 'GPS Connecting';
+
   return (
     <main className="dashboard-page">
       <div className="ambient ambient-one" />
@@ -882,11 +1025,18 @@ export function DriverBoard({
           >
             <Compass size={13} /> Driver View
           </button>
-          <span className="driver-wakelock-pill" title="Screen Wake Lock is active">
-            <SunMedium size={12} /> Screen Awake
+          <span
+            className="driver-wakelock-pill"
+            title={screenAwake ? 'Screen Wake Lock is active' : 'Tap anywhere to keep screen awake'}
+          >
+            <SunMedium size={12} /> {screenAwake ? 'Screen Awake' : 'Wake Ready'}
           </span>
-          <span className="driver-duty-badge">
-            <span className="driver-duty-dot" /> On Duty
+          <span
+            className="driver-duty-badge"
+            title="Real-time GPS telemetry status"
+          >
+            <Radio size={12} style={{ marginRight: 4 }} />
+            {gpsLabel}
           </span>
           <span style={{ fontWeight: 600 }}>{profile.name || driverEmail}</span>
           <ThemeToggle className="theme-toggle compact" />
@@ -898,11 +1048,12 @@ export function DriverBoard({
 
       <div className="dashboard-shell">
         <div className="dashboard-intro">
-          <span className="eyebrow">CHAUFFEUR PORTAL</span>
+          <span className="eyebrow">CHAUFFEUR MISSION PORTAL</span>
           <h1>Driver Mission Center</h1>
           <p>
-            Manage active assignments in real time. Accept trips, notify arrival, confirm passenger pickup,
-            complete drop-off, and add trip notes.
+            Manage active assignments in real time. <strong>On the Way</strong> unlocks 1 hour before pickup
+            (auto-sends <em>“Your driver is on the way.”</em>) and <strong>Arrived</strong> unlocks 25 minutes
+            before pickup (auto-sends <em>“Your driver has arrived.”</em>).
           </p>
         </div>
 
@@ -912,10 +1063,17 @@ export function DriverBoard({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span className="fleet-live-pulse" />
-                <strong style={{ fontSize: 15, color: '#38bdf8' }}>Active Ride In Progress: {activeRide.name || 'Guest'}</strong>
+                <strong style={{ fontSize: 15, color: '#38bdf8' }}>
+                  Active Ride In Progress: {activeRide.name || 'Guest'}
+                </strong>
+                {activeRide.sourceName && (
+                  <span className="driver-brand-tag">{activeRide.sourceName}</span>
+                )}
               </div>
               <p style={{ margin: '4px 0 0', fontSize: 13, color: '#94a3b8' }}>
-                {getTripStage(activeRide) <= 2 ? `Heading to Pickup: ${activeRide.pickup}` : `En Route to Dropoff: ${activeRide.dropoff}`}
+                {getTripStage(activeRide) <= 2
+                  ? `Heading to Pickup: ${activeRide.pickup}`
+                  : `En Route to Dropoff: ${activeRide.dropoff}`}
               </p>
             </div>
             <button
@@ -944,7 +1102,7 @@ export function DriverBoard({
           </div>
           <div className="driver-stat-card" style={{ borderLeft: '3px solid #0284c7' }}>
             <span className="driver-stat-num" style={{ color: '#0284c7' }}>{stats.active}</span>
-            <span className="driver-stat-label">Active / Pending</span>
+            <span className="driver-stat-label">Active / Upcoming</span>
           </div>
           <div className="driver-stat-card" style={{ borderLeft: '3px solid #16a34a' }}>
             <span className="driver-stat-num" style={{ color: '#16a34a' }}>{stats.completed}</span>
@@ -1020,7 +1178,7 @@ export function DriverBoard({
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search passenger, address, flight…"
+                placeholder="Search passenger, address, flight, brand…"
                 aria-label="Search trips"
               />
               {search && (
@@ -1136,6 +1294,7 @@ export function DriverBoard({
                   const tripSms = smsSentLog[t.id] || {};
                   const onTheWaySent = stage >= 1 || Boolean(tripSms.on_the_way);
                   const arrivedSent = stage >= 2 || Boolean(tripSms.arrived);
+                  const tw = getTripTimeWindow(t.pickupAt, nowMs);
 
                   return (
                     <article
@@ -1157,6 +1316,28 @@ export function DriverBoard({
                               REF: RB-{t.id.slice(-8).toUpperCase()}
                             </span>
                             <StatusBadge value={st} />
+                            {stage < 4 && (
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  padding: '2px 8px',
+                                  borderRadius: 999,
+                                  background: tw.canUpdateArrived
+                                    ? '#dcfce7'
+                                    : tw.canUpdateOnTheWay
+                                    ? '#dbeafe'
+                                    : '#f1f5f9',
+                                  color: tw.canUpdateArrived
+                                    ? '#166534'
+                                    : tw.canUpdateOnTheWay
+                                    ? '#1e40af'
+                                    : '#475569',
+                                }}
+                              >
+                                ⏰ {tw.pickupCountdownLabel}
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -1168,22 +1349,33 @@ export function DriverBoard({
                         </div>
                       </div>
 
-                      {/* Route Section with Instant Google Maps Navigation */}
+                      {/* Route Section with Instant Google Maps & Waze Navigation */}
                       <div className="reservation-card-route" style={{ margin: 0 }}>
                         {t.pickup && (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                             <span>
                               <span className="pickup-marker" /> <strong>Pickup:</strong> {t.pickup}
                             </span>
-                            <a
-                              href={googleMapsUrl(t.pickup)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="driver-tool-btn"
-                              title="Navigate to Pickup"
-                            >
-                              <Navigation size={13} color="#2563eb" /> Navigate
-                            </a>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <a
+                                href={googleMapsUrl(t.pickup)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="driver-tool-btn"
+                                title="Navigate to Pickup with Google Maps"
+                              >
+                                <Navigation size={13} color="#2563eb" /> Maps
+                              </a>
+                              <a
+                                href={wazeUrl(t.pickup)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="driver-tool-btn"
+                                title="Navigate to Pickup with Waze"
+                              >
+                                <Compass size={13} color="#0284c7" /> Waze
+                              </a>
+                            </div>
                           </div>
                         )}
                         {t.extraStop && (
@@ -1196,15 +1388,26 @@ export function DriverBoard({
                             <span>
                               <span className="dropoff-marker mini" /> <strong>Dropoff:</strong> {t.dropoff}
                             </span>
-                            <a
-                              href={googleMapsUrl(t.dropoff)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="driver-tool-btn"
-                              title="Navigate to Dropoff"
-                            >
-                              <Navigation size={13} color="#16a34a" /> Navigate
-                            </a>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <a
+                                href={googleMapsUrl(t.dropoff)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="driver-tool-btn"
+                                title="Navigate to Dropoff with Google Maps"
+                              >
+                                <Navigation size={13} color="#16a34a" /> Maps
+                              </a>
+                              <a
+                                href={wazeUrl(t.dropoff)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="driver-tool-btn"
+                                title="Navigate to Dropoff with Waze"
+                              >
+                                <Compass size={13} color="#0284c7" /> Waze
+                              </a>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1274,26 +1477,50 @@ export function DriverBoard({
                       <div className="driver-pipeline-container">
                         <button
                           type="button"
-                          disabled={isBusy}
+                          disabled={isBusy || !tw.canUpdateOnTheWay}
                           onClick={() => handleTripAction(t.id, 'on_the_way')}
                           className={`driver-pipe-step${stage >= 1 ? ' done' : stage === 0 ? ' current' : ''}`}
-                          style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 0 }}
-                          title='Set status to On the Way & send "Your driver is on the way."'
+                          style={{
+                            border: 0,
+                            background: 'transparent',
+                            cursor: !tw.canUpdateOnTheWay ? 'not-allowed' : 'pointer',
+                            padding: 0,
+                            opacity: !tw.canUpdateOnTheWay && stage < 1 ? 0.55 : 1,
+                          }}
+                          title={
+                            tw.canUpdateOnTheWay
+                              ? 'Set status to On the Way & send "Your driver is on the way."'
+                              : tw.onTheWayWaitLabel
+                          }
                         >
-                          <span className="driver-pipe-num">{stage >= 1 ? '✓' : '1'}</span>
+                          <span className="driver-pipe-num">
+                            {stage >= 1 ? '✓' : !tw.canUpdateOnTheWay ? '🔒' : '1'}
+                          </span>
                           <span>On the Way</span>
                         </button>
                         <div className={`driver-pipe-divider${stage >= 1 ? ' done' : ''}`} />
 
                         <button
                           type="button"
-                          disabled={isBusy}
+                          disabled={isBusy || !tw.canUpdateArrived}
                           onClick={() => handleTripAction(t.id, 'arrive')}
                           className={`driver-pipe-step${stage >= 2 ? ' done' : stage === 1 ? ' current' : ''}`}
-                          style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 0 }}
-                          title='Set status to Arrived & send "Your driver has arrived."'
+                          style={{
+                            border: 0,
+                            background: 'transparent',
+                            cursor: !tw.canUpdateArrived ? 'not-allowed' : 'pointer',
+                            padding: 0,
+                            opacity: !tw.canUpdateArrived && stage < 2 ? 0.55 : 1,
+                          }}
+                          title={
+                            tw.canUpdateArrived
+                              ? 'Set status to Arrived & send "Your driver has arrived."'
+                              : tw.arrivedWaitLabel
+                          }
                         >
-                          <span className="driver-pipe-num">{stage >= 2 ? '✓' : '2'}</span>
+                          <span className="driver-pipe-num">
+                            {stage >= 2 ? '✓' : !tw.canUpdateArrived ? '🔒' : '2'}
+                          </span>
                           <span>Arrived</span>
                         </button>
                         <div className={`driver-pipe-divider${stage >= 2 ? ' done' : ''}`} />
@@ -1328,11 +1555,24 @@ export function DriverBoard({
                           <button
                             type="button"
                             className="driver-primary-btn btn-accept"
-                            disabled={isBusy}
+                            disabled={isBusy || !tw.canUpdateOnTheWay}
                             onClick={() => handleTripAction(t.id, 'on_the_way')}
+                            style={
+                              !tw.canUpdateOnTheWay
+                                ? { background: '#64748b', cursor: 'not-allowed', opacity: 0.85 }
+                                : undefined
+                            }
                           >
-                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Navigation size={16} strokeWidth={2.5} />}
-                            On the Way — Notify Customer (“Your driver is on the way.”)
+                            {isBusy ? (
+                              <Loader2 size={16} className="animate-spin" />
+                            ) : !tw.canUpdateOnTheWay ? (
+                              <LockKeyhole size={16} />
+                            ) : (
+                              <Navigation size={16} strokeWidth={2.5} />
+                            )}
+                            {tw.canUpdateOnTheWay
+                              ? 'On the Way — Notify Customer (“Your driver is on the way.”)'
+                              : `On the Way Locked • ${tw.onTheWayWaitLabel}`}
                           </button>
                         )}
 
@@ -1340,11 +1580,24 @@ export function DriverBoard({
                           <button
                             type="button"
                             className="driver-primary-btn btn-arrive"
-                            disabled={isBusy}
+                            disabled={isBusy || !tw.canUpdateArrived}
                             onClick={() => handleTripAction(t.id, 'arrive')}
+                            style={
+                              !tw.canUpdateArrived
+                                ? { background: '#64748b', cursor: 'not-allowed', opacity: 0.85 }
+                                : undefined
+                            }
                           >
-                            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} strokeWidth={2.5} />}
-                            Arrived — Notify Customer (“Your driver has arrived.”)
+                            {isBusy ? (
+                              <Loader2 size={16} className="animate-spin" />
+                            ) : !tw.canUpdateArrived ? (
+                              <LockKeyhole size={16} />
+                            ) : (
+                              <MapPin size={16} strokeWidth={2.5} />
+                            )}
+                            {tw.canUpdateArrived
+                              ? 'Arrived — Notify Customer (“Your driver has arrived.”)'
+                              : `Arrived Locked • ${tw.arrivedWaitLabel}`}
                           </button>
                         )}
 
@@ -1379,7 +1632,7 @@ export function DriverBoard({
                         )}
                       </div>
 
-                      {/* Automated Customer SMS Notifications Status Box */}
+                      {/* Automated Customer SMS Notifications & Time-Window Status Box */}
                       <div
                         style={{
                           padding: '12px 14px',
@@ -1393,7 +1646,7 @@ export function DriverBoard({
                       >
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                           <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: '#334155', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <MessageSquare size={13} color="#2563eb" /> Automated Customer SMS Notifications
+                            <MessageSquare size={13} color="#2563eb" /> Automated Customer SMS &amp; Time Windows
                           </span>
                           {t.phone && (
                             <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
@@ -1402,11 +1655,11 @@ export function DriverBoard({
                           )}
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
-                          {/* Automated SMS 1: On the way */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 8 }}>
+                          {/* Automated SMS 1: On the way (1 hour before pickup) */}
                           <div
                             style={{
-                              padding: '8px 12px',
+                              padding: '10px 12px',
                               borderRadius: 10,
                               background: onTheWaySent ? '#eff6ff' : '#ffffff',
                               border: `1px solid ${onTheWaySent ? '#bfdbfe' : '#e2e8f0'}`,
@@ -1423,10 +1676,13 @@ export function DriverBoard({
                               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
                                 “Your driver is on the way.”
                               </div>
+                              <div style={{ fontSize: 11, color: tw.canUpdateOnTheWay ? '#16a34a' : '#d97706', fontWeight: 600, marginTop: 2 }}>
+                                {tw.canUpdateOnTheWay ? '✓ 1-Hr Window Open' : `🔒 ${tw.onTheWayWaitLabel}`}
+                              </div>
                             </div>
                             <button
                               type="button"
-                              disabled={isBusy}
+                              disabled={isBusy || !tw.canUpdateOnTheWay}
                               onClick={() => handleTripAction(t.id, 'on_the_way')}
                               style={{
                                 border: 0,
@@ -1434,20 +1690,32 @@ export function DriverBoard({
                                 padding: '6px 10px',
                                 fontSize: 11,
                                 fontWeight: 800,
-                                cursor: 'pointer',
-                                background: onTheWaySent ? '#dbeafe' : '#2563eb',
-                                color: onTheWaySent ? '#1e40af' : '#ffffff',
+                                cursor: !tw.canUpdateOnTheWay ? 'not-allowed' : 'pointer',
+                                background: !tw.canUpdateOnTheWay
+                                  ? '#e2e8f0'
+                                  : onTheWaySent
+                                  ? '#dbeafe'
+                                  : '#2563eb',
+                                color: !tw.canUpdateOnTheWay
+                                  ? '#64748b'
+                                  : onTheWaySent
+                                  ? '#1e40af'
+                                  : '#ffffff',
                                 whiteSpace: 'nowrap',
                               }}
                             >
-                              {onTheWaySent ? '✓ Sent · Resend' : 'Set On the Way'}
+                              {!tw.canUpdateOnTheWay
+                                ? '🔒 1 Hr Prior'
+                                : onTheWaySent
+                                ? '✓ Sent · Resend'
+                                : 'Set On the Way'}
                             </button>
                           </div>
 
-                          {/* Automated SMS 2: Arrived */}
+                          {/* Automated SMS 2: Arrived (25 minutes before pickup) */}
                           <div
                             style={{
-                              padding: '8px 12px',
+                              padding: '10px 12px',
                               borderRadius: 10,
                               background: arrivedSent ? '#f0fdf4' : '#ffffff',
                               border: `1px solid ${arrivedSent ? '#bbf7d0' : '#e2e8f0'}`,
@@ -1464,10 +1732,13 @@ export function DriverBoard({
                               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
                                 “Your driver has arrived.”
                               </div>
+                              <div style={{ fontSize: 11, color: tw.canUpdateArrived ? '#16a34a' : '#d97706', fontWeight: 600, marginTop: 2 }}>
+                                {tw.canUpdateArrived ? '✓ 25-Min Window Open' : `🔒 ${tw.arrivedWaitLabel}`}
+                              </div>
                             </div>
                             <button
                               type="button"
-                              disabled={isBusy}
+                              disabled={isBusy || !tw.canUpdateArrived}
                               onClick={() => handleTripAction(t.id, 'arrive')}
                               style={{
                                 border: 0,
@@ -1475,13 +1746,25 @@ export function DriverBoard({
                                 padding: '6px 10px',
                                 fontSize: 11,
                                 fontWeight: 800,
-                                cursor: 'pointer',
-                                background: arrivedSent ? '#dcfce7' : '#16a34a',
-                                color: arrivedSent ? '#166534' : '#ffffff',
+                                cursor: !tw.canUpdateArrived ? 'not-allowed' : 'pointer',
+                                background: !tw.canUpdateArrived
+                                  ? '#e2e8f0'
+                                  : arrivedSent
+                                  ? '#dcfce7'
+                                  : '#16a34a',
+                                color: !tw.canUpdateArrived
+                                  ? '#64748b'
+                                  : arrivedSent
+                                  ? '#166534'
+                                  : '#ffffff',
                                 whiteSpace: 'nowrap',
                               }}
                             >
-                              {arrivedSent ? '✓ Sent · Resend' : 'Set Arrived'}
+                              {!tw.canUpdateArrived
+                                ? '🔒 25 Min Prior'
+                                : arrivedSent
+                                ? '✓ Sent · Resend'
+                                : 'Set Arrived'}
                             </button>
                           </div>
                         </div>
@@ -1659,7 +1942,6 @@ export function DriverBoard({
         if (!t) {
           return (
             <div className="driver-driveview-modal" role="dialog" aria-modal="true" aria-label="Chauffeur Standby Cockpit">
-              {/* Standby Drawer */}
               {driveMenuOpen && (
                 <div
                   className="trip-scrim"
@@ -1761,7 +2043,7 @@ export function DriverBoard({
                     <Calendar size={14} /> All Trips
                   </button>
                   <span className="driver-wakelock-pill" title="Screen Wake Lock is active">
-                    <SunMedium size={12} /> Screen Awake
+                    <SunMedium size={12} /> {screenAwake ? 'Screen Awake' : 'Wake Ready'}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span className="fleet-live-pulse" />
@@ -1789,7 +2071,7 @@ export function DriverBoard({
                     <MapPin size={15} color="#38bdf8" />
                     <span>CHAUFFEUR STATUS</span>
                     <span className="driver-time-pill" style={{ color: '#4ade80' }}>
-                      <span className="driver-duty-dot" style={{ background: '#22c55e' }} /> On Duty
+                      <span className="driver-duty-dot" style={{ background: '#22c55e' }} /> On Duty ({gpsLabel})
                     </span>
                   </div>
                   <h2 className="driver-hud-dest-address">Awaiting Next Dispatch Assignment</h2>
@@ -1807,7 +2089,6 @@ export function DriverBoard({
                   </div>
                 </div>
 
-                {/* Duty Ready Banner */}
                 <div className="driver-hud-big-action done" style={{ background: '#131d2e', border: '1px solid #1e293b', color: '#38bdf8' }}>
                   <Sparkles size={18} /> READY FOR DISPATCH ASSIGNMENT
                 </div>
@@ -1824,6 +2105,7 @@ export function DriverBoard({
         const isNoteBusy = savingNoteId === t.id;
         const isNoteSaved = savedNoteId === t.id;
         const currentDraft = notesDraft[t.id] ?? t.driverNotes ?? '';
+        const tw = getTripTimeWindow(t.pickupAt, nowMs);
 
         return (
           <div className="driver-driveview-modal" role="dialog" aria-modal="true" aria-label="Chauffeur Drive View">
@@ -1846,7 +2128,6 @@ export function DriverBoard({
                   </div>
 
                   <div className="driver-drivemenu-body">
-                    {/* Switch Active Mission */}
                     <div className="driver-drivemenu-section">
                       <span className="driver-drivemenu-label">Switch Mission / Assigned Rides</span>
                       {sorted.filter((x) => getTripStage(x) < 4).length === 0 ? (
@@ -1876,7 +2157,6 @@ export function DriverBoard({
                       )}
                     </div>
 
-                    {/* Turn-by-Turn Navigation Apps */}
                     <div className="driver-drivemenu-section">
                       <span className="driver-drivemenu-label">Turn-by-Turn GPS Navigation</span>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1914,7 +2194,6 @@ export function DriverBoard({
                       </div>
                     </div>
 
-                    {/* Fast Contacts */}
                     <div className="driver-drivemenu-section">
                       <span className="driver-drivemenu-label">Quick Contacts</span>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1934,7 +2213,6 @@ export function DriverBoard({
                       </div>
                     </div>
 
-                    {/* Navigation To Other Tabs */}
                     <div className="driver-drivemenu-section">
                       <span className="driver-drivemenu-label">Mission Center</span>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1943,6 +2221,7 @@ export function DriverBoard({
                           className="driver-drivemenu-link"
                           onClick={() => {
                             setDriveMenuOpen(false);
+                            setDriveViewTripId(null);
                             setActiveTab('all');
                           }}
                         >
@@ -1953,6 +2232,7 @@ export function DriverBoard({
                           className="driver-drivemenu-link"
                           onClick={() => {
                             setDriveMenuOpen(false);
+                            setDriveViewTripId(null);
                             setActiveTab('settings');
                           }}
                         >
@@ -1995,19 +2275,25 @@ export function DriverBoard({
                   type="button"
                   className="driver-tool-btn"
                   style={{ background: '#1e293b', color: '#cbd5e1', border: '1px solid #334155' }}
-                  onClick={() => setActiveTab('all')}
+                  onClick={() => {
+                    setDriveViewTripId(null);
+                    setActiveTab('all');
+                  }}
                   title="View All Scheduled Trips"
                 >
                   <Calendar size={14} /> All Trips
                 </button>
                 <span className="driver-wakelock-pill" title="Screen Wake Lock is active">
-                  <SunMedium size={12} /> Screen Awake
+                  <SunMedium size={12} /> {screenAwake ? 'Screen Awake' : 'Wake Ready'}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span className="fleet-live-pulse" />
                   <strong style={{ fontSize: 14, color: '#fff' }}>
                     {t.name || 'Guest'}
                   </strong>
+                  {t.sourceName && (
+                    <span className="driver-brand-tag">{t.sourceName}</span>
+                  )}
                 </div>
               </div>
 
@@ -2034,6 +2320,36 @@ export function DriverBoard({
             </header>
 
             <div className="driver-driveview-hud">
+              {/* Error Banner inside HUD if driver taps a locked status early */}
+              {actionError && (
+                <div
+                  role="alert"
+                  style={{
+                    padding: '10px 14px',
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    border: '1.5px solid #ef4444',
+                    borderRadius: 10,
+                    color: '#fecaca',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                  }}
+                >
+                  <span>⚠️ {actionError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setActionError('')}
+                    style={{ border: 0, background: 'transparent', color: '#fca5a5', cursor: 'pointer' }}
+                    aria-label="Dismiss error"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              )}
+
               {/* Live Automated SMS Notification Toast inside HUD */}
               {smsBanner && smsBanner.tripId === t.id && (
                 <div
@@ -2094,7 +2410,7 @@ export function DriverBoard({
                     </span>
                   )}
                   <span className="driver-time-pill">
-                    <Clock size={11} /> {clock(t.pickupAt)}
+                    <Clock size={11} /> {clock(t.pickupAt)} ({tw.pickupCountdownLabel})
                   </span>
                 </div>
                 <h2 className="driver-hud-dest-address">{targetAddress || 'Address to be confirmed'}</h2>
@@ -2135,7 +2451,7 @@ export function DriverBoard({
                 )}
               </div>
 
-              {/* Driver Status & Automated SMS Quick Control Strip */}
+              {/* Driver Status & Automated SMS Quick Control Strip (with 1-Hr & 25-Min Window Gating) */}
               {(() => {
                 const tripSms = smsSentLog[t.id] || {};
                 const onTheWaySent = stage >= 1 || Boolean(tripSms.on_the_way);
@@ -2164,15 +2480,20 @@ export function DriverBoard({
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
                       <button
                         type="button"
-                        disabled={isBusy}
+                        disabled={isBusy || !tw.canUpdateOnTheWay}
                         onClick={() => handleTripAction(t.id, 'on_the_way')}
                         style={{
                           padding: '10px 12px',
                           borderRadius: 10,
                           border: stage === 1 ? '2px solid #38bdf8' : '1px solid #334155',
-                          background: onTheWaySent ? 'rgba(37, 99, 235, 0.28)' : '#1e293b',
+                          background: !tw.canUpdateOnTheWay
+                            ? '#0f172a'
+                            : onTheWaySent
+                            ? 'rgba(37, 99, 235, 0.28)'
+                            : '#1e293b',
                           color: '#fff',
-                          cursor: 'pointer',
+                          cursor: !tw.canUpdateOnTheWay ? 'not-allowed' : 'pointer',
+                          opacity: !tw.canUpdateOnTheWay ? 0.65 : 1,
                           textAlign: 'left',
                           display: 'flex',
                           flexDirection: 'column',
@@ -2181,28 +2502,36 @@ export function DriverBoard({
                       >
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                           <span style={{ fontSize: 12, fontWeight: 800, color: '#60a5fa' }}>
-                            🚗 Status: On the Way
+                            {!tw.canUpdateOnTheWay ? '🔒' : '🚗'} Status: On the Way
                           </span>
                           <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 6, background: onTheWaySent ? '#2563eb' : '#334155', color: '#fff' }}>
-                            {onTheWaySent ? '✓ SMS SENT' : 'AUTO-SMS'}
+                            {onTheWaySent ? '✓ SMS SENT' : !tw.canUpdateOnTheWay ? '≤ 1 HR PRIOR' : 'AUTO-SMS'}
                           </span>
                         </div>
                         <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>
                           “Your driver is on the way.”
                         </span>
+                        <span style={{ fontSize: 10, color: tw.canUpdateOnTheWay ? '#4ade80' : '#fbbf24', fontWeight: 700 }}>
+                          {tw.onTheWayWaitLabel}
+                        </span>
                       </button>
 
                       <button
                         type="button"
-                        disabled={isBusy}
+                        disabled={isBusy || !tw.canUpdateArrived}
                         onClick={() => handleTripAction(t.id, 'arrive')}
                         style={{
                           padding: '10px 12px',
                           borderRadius: 10,
                           border: stage === 2 ? '2px solid #4ade80' : '1px solid #334155',
-                          background: arrivedSent ? 'rgba(22, 163, 74, 0.28)' : '#1e293b',
+                          background: !tw.canUpdateArrived
+                            ? '#0f172a'
+                            : arrivedSent
+                            ? 'rgba(22, 163, 74, 0.28)'
+                            : '#1e293b',
                           color: '#fff',
-                          cursor: 'pointer',
+                          cursor: !tw.canUpdateArrived ? 'not-allowed' : 'pointer',
+                          opacity: !tw.canUpdateArrived ? 0.65 : 1,
                           textAlign: 'left',
                           display: 'flex',
                           flexDirection: 'column',
@@ -2211,14 +2540,17 @@ export function DriverBoard({
                       >
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                           <span style={{ fontSize: 12, fontWeight: 800, color: '#4ade80' }}>
-                            📍 Status: Arrived
+                            {!tw.canUpdateArrived ? '🔒' : '📍'} Status: Arrived
                           </span>
                           <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 6, background: arrivedSent ? '#16a34a' : '#334155', color: '#fff' }}>
-                            {arrivedSent ? '✓ SMS SENT' : 'AUTO-SMS'}
+                            {arrivedSent ? '✓ SMS SENT' : !tw.canUpdateArrived ? '≤ 25 MIN PRIOR' : 'AUTO-SMS'}
                           </span>
                         </div>
                         <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>
                           “Your driver has arrived.”
+                        </span>
+                        <span style={{ fontSize: 10, color: tw.canUpdateArrived ? '#4ade80' : '#fbbf24', fontWeight: 700 }}>
+                          {tw.arrivedWaitLabel}
                         </span>
                       </button>
                     </div>
@@ -2232,11 +2564,24 @@ export function DriverBoard({
                   <button
                     type="button"
                     className="driver-hud-big-action accept"
-                    disabled={isBusy}
+                    disabled={isBusy || !tw.canUpdateOnTheWay}
                     onClick={() => handleTripAction(t.id, 'on_the_way')}
+                    style={
+                      !tw.canUpdateOnTheWay
+                        ? { background: '#334155', cursor: 'not-allowed', opacity: 0.85 }
+                        : undefined
+                    }
                   >
-                    {isBusy ? <Loader2 size={20} className="animate-spin" /> : <Navigation size={20} strokeWidth={3} />}
-                    ON THE WAY — SEND “YOUR DRIVER IS ON THE WAY.”
+                    {isBusy ? (
+                      <Loader2 size={20} className="animate-spin" />
+                    ) : !tw.canUpdateOnTheWay ? (
+                      <LockKeyhole size={20} />
+                    ) : (
+                      <Navigation size={20} strokeWidth={3} />
+                    )}
+                    {tw.canUpdateOnTheWay
+                      ? 'ON THE WAY — SEND “YOUR DRIVER IS ON THE WAY.”'
+                      : `ON THE WAY LOCKED • ${tw.onTheWayWaitLabel.toUpperCase()}`}
                   </button>
                 )}
 
@@ -2244,11 +2589,24 @@ export function DriverBoard({
                   <button
                     type="button"
                     className="driver-hud-big-action arrive"
-                    disabled={isBusy}
+                    disabled={isBusy || !tw.canUpdateArrived}
                     onClick={() => handleTripAction(t.id, 'arrive')}
+                    style={
+                      !tw.canUpdateArrived
+                        ? { background: '#334155', cursor: 'not-allowed', opacity: 0.85 }
+                        : undefined
+                    }
                   >
-                    {isBusy ? <Loader2 size={20} className="animate-spin" /> : <MapPin size={20} strokeWidth={3} />}
-                    I’VE ARRIVED — SEND “YOUR DRIVER HAS ARRIVED.”
+                    {isBusy ? (
+                      <Loader2 size={20} className="animate-spin" />
+                    ) : !tw.canUpdateArrived ? (
+                      <LockKeyhole size={20} />
+                    ) : (
+                      <MapPin size={20} strokeWidth={3} />
+                    )}
+                    {tw.canUpdateArrived
+                      ? 'I’VE ARRIVED — SEND “YOUR DRIVER HAS ARRIVED.”'
+                      : `ARRIVED LOCKED • ${tw.arrivedWaitLabel.toUpperCase()}`}
                   </button>
                 )}
 

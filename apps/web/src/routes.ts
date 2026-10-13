@@ -12,7 +12,6 @@ export default [
 	route('robots.txt', 'routes/robots.txt.ts'),
 	route('api/health', 'routes/api.health.ts'),
 	route('api/places-autocomplete', 'routes/api.places-autocomplete.ts'),
-	route('api/distance', 'routes/api.distance.ts'),
 	route('api/pricing', 'routes/api.pricing.ts'),
 	route('api/businesses', 'routes/api.businesses.ts'),
 	route('api/business-settings', 'routes/api.business-settings.ts'),
@@ -36,6 +35,6 @@ export default [
 	route('payment/success', 'routes/payment.success.tsx'),
 	route('payment/cancel', 'routes/payment.cancel.tsx'),
 	route('api/*', 'routes/api.$.ts'),
-	route('biz/:bizSlug', 'routes/home.tsx'),
-	route(':bizSlug', 'routes/home.tsx'),
+	route('biz/:bizSlug', 'routes/home.tsx', { id: 'routes/home-biz-slug' }),
+	route(':bizSlug', 'routes/home.tsx', { id: 'routes/home-slug' }),
 ] satisfies RouteConfig;
