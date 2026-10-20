@@ -213,7 +213,12 @@ export async function loadBusinessPricing(bizId: string): Promise<BusinessPricin
     }
   }
 
-  return { pricing, tiers, businessName: record?.businessName ?? '', owner, hasSettings: Boolean(record) };
+  const rawName = record?.businessName ?? '';
+  const businessName = (!rawName || rawName === 'RideLink' || rawName.toUpperCase() === 'ELITELIMOLINK')
+    ? 'BookNowLux'
+    : rawName;
+
+  return { pricing, tiers, businessName, owner, hasSettings: Boolean(record) };
 }
 
 /**

@@ -120,7 +120,10 @@ async function buildPricingSnapshot(rawBizId: string | null | undefined, cacheab
       }
     : DEFAULT_PRICING;
 
-  const businessName = record?.businessName ?? '';
+  const rawName = record?.businessName ?? '';
+  const businessName = (!rawName || rawName === 'RideLink' || rawName.toUpperCase() === 'ELITELIMOLINK')
+    ? 'BookNowLux'
+    : rawName;
 
   // Active vehicle tiers for the same operator, in display order. Falls back
   // to the built-in defaults when the operator has none (or is unknown) so
