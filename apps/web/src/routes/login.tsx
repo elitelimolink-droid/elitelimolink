@@ -9,7 +9,7 @@ import { ForgotPassword } from '@/components/shared/forgot-password';
 
 export function meta({ matches, location }: Route.MetaArgs) {
   return seo({ matches, location }, {
-    title: 'Operator Sign In | ELITELIMOLINK',
+    title: 'Operator Sign In | BookNowLux',
     description: 'Sign in or create your operator dashboard to manage fares, vehicle categories, dispatch notifications, and mapping for your own business.',
     noindex: true,
   });
@@ -83,7 +83,7 @@ export default function LoginPage() {
       <div className="ambient ambient-one" /><div className="ambient ambient-two" />
       <a href="/" className="page-brand" style={{ textDecoration: 'none' }}>
         <span className="brand-mark">B<span>L</span></span>
-        <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / OPERATOR</span></span>
+        <span className="brand-word">BookNowLux<span className="brand-sub"> / OPERATOR</span></span>
       </a>
       {forgot ? (
         <div className="auth-card">

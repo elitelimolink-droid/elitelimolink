@@ -1003,8 +1003,8 @@ export function DriverBoard({
             setActiveTab('drive');
           }}
         >
-          <span className="brand-mark">E<span>L</span></span>
-          <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / CHAUFFEUR</span></span>
+          <span className="brand-mark">B<span>L</span></span>
+          <span className="brand-word">BookNowLux<span className="brand-sub"> / CHAUFFEUR</span></span>
         </a>
         <div className="dashboard-user">
           <button
@@ -2021,8 +2021,8 @@ export function DriverBoard({
               <header className="driver-driveview-topbar">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
-                    <span className="brand-mark" style={{ width: 24, height: 24, fontSize: 11, borderRadius: 6 }}>E<span>L</span></span>
-                    <span style={{ fontSize: 13, fontWeight: 900, color: '#fff', letterSpacing: '.04em' }}>ELITELIMOLINK</span>
+                    <span className="brand-mark" style={{ width: 24, height: 24, fontSize: 11, borderRadius: 6 }}>B<span>L</span></span>
+                    <span style={{ fontSize: 13, fontWeight: 900, color: '#fff', letterSpacing: '.04em' }}>BookNowLux</span>
                   </div>
                   <button
                     type="button"
@@ -2259,8 +2259,8 @@ export function DriverBoard({
             <header className="driver-driveview-topbar">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
-                  <span className="brand-mark" style={{ width: 24, height: 24, fontSize: 11, borderRadius: 6 }}>E<span>L</span></span>
-                  <span style={{ fontSize: 13, fontWeight: 900, color: '#fff', letterSpacing: '.04em' }}>ELITELIMOLINK</span>
+                  <span className="brand-mark" style={{ width: 24, height: 24, fontSize: 11, borderRadius: 6 }}>B<span>L</span></span>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: '#fff', letterSpacing: '.04em' }}>BookNowLux</span>
                 </div>
                 <button
                   type="button"

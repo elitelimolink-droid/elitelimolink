@@ -5,7 +5,7 @@ import { DriverBoard } from '@/components/driver/driver-board';
 
 export function meta({ matches, location }: Route.MetaArgs) {
   return seo({ matches, location }, {
-    title: 'Driver Area | ELITELIMOLINK',
+    title: 'Driver Area | BookNowLux',
     description: 'View your assigned trips and manage your driver profile.',
     noindex: true,
   });

@@ -82,7 +82,7 @@ export async function resolveBusinessId(rawIdOrSlug: string | null | undefined, 
       sort: 'created',
     });
 
-    if (slug && slug !== 'elitelimolink' && slug !== 'home') {
+    if (slug && slug !== 'elitelimolink' && slug !== 'booknowlux' && slug !== 'home') {
       const match = users.items.find(u => {
         const uName = (u.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
         const uEmail = (u.email || '').toLowerCase();
@@ -104,7 +104,7 @@ export async function resolveBusinessId(rawIdOrSlug: string | null | undefined, 
       }
     }
 
-    if (host && !host.includes('elitelimolink') && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+    if (host && !host.includes('booknowlux') && !host.includes('elitelimolink') && !host.includes('localhost') && !host.includes('127.0.0.1')) {
       const domainClean = host.split(':')[0].split('.')[0].replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       const domainAlnum = domainClean.replace(/-/g, '');
       const match = users.items.find(u => {

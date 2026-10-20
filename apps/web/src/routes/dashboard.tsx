@@ -5,7 +5,7 @@ import { TripBoard } from '@/components/dashboard/trip-board';
 
 export function meta({ matches, location }: Route.MetaArgs) {
   return seo({ matches, location }, {
-    title: 'Dashboard | ELITELIMOLINK',
+    title: 'Dashboard | BookNowLux',
     description: 'Upcoming reservations grouped by trip date, with status, search, and operator settings.',
     noindex: true,
   });

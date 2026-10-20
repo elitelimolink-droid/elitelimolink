@@ -773,7 +773,7 @@ export function TripBoard({
                         className={business === b.name ? 'on' : ''}
                         onClick={() => { setBusiness(b.name); setSelectedBusinessId(b.id); setBizMenuOpen(false); }}
                       >
-                        <span>{b.name.toUpperCase() === 'ELITELIMOLINK' ? 'Elite Limo Link' : b.name}</span>
+                        <span>{b.name.toUpperCase() === 'ELITELIMOLINK' || b.name.toUpperCase() === 'BOOKNOWLUX' ? 'BookNowLux' : b.name}</span>
                         <em>{b.count}</em>
                       </button>
                     ))}
@@ -1011,9 +1011,9 @@ export function TripBoard({
             <button type="button" onClick={() => { setPanel('drivers'); setMenuOpen(false); }}>Drivers</button>
             <Link to="/dispatch" onClick={() => setMenuOpen(false)}>Dispatch center</Link>
             <Link to="/driver" onClick={() => setMenuOpen(false)}>Driver portal</Link>
-            <Link to="/" onClick={() => setMenuOpen(false)}>Elite Limo Link</Link>
+            <Link to="/" onClick={() => setMenuOpen(false)}>BookNowLux</Link>
             {businesses
-              .filter((b) => b.businessName && !b.businessName.toLowerCase().includes('elitelimolink') && b.id !== userId)
+              .filter((b) => b.businessName && !b.businessName.toLowerCase().includes('elitelimolink') && !b.businessName.toLowerCase().includes('booknowlux') && b.id !== userId)
               .map((b) => (
                 <Link key={b.id} to={getBizLink(b, false)} onClick={() => setMenuOpen(false)}>
                   {b.businessName}
@@ -1154,7 +1154,7 @@ export function TripBoard({
                 // account email, then a placeholder, so every business entry is
                 // always visible — even one whose settings row is still seeding.
                 const rawName = (b.businessName || '').trim();
-                const displayName = rawName.toUpperCase() === 'ELITELIMOLINK' ? 'Elite Limo Link' : rawName || b.email || 'Unnamed business';
+                const displayName = rawName.toUpperCase() === 'ELITELIMOLINK' || rawName.toUpperCase() === 'BOOKNOWLUX' ? 'BookNowLux' : rawName || b.email || 'Unnamed business';
                 const link = getBizLink(b, isOwn);
                 return (
                   <li

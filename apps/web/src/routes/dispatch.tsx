@@ -6,7 +6,7 @@ import { ThemeToggle } from '@/components/shared/theme-toggle';
 
 export function meta({ matches, location }: Route.MetaArgs) {
   return seo({ matches, location }, {
-    title: 'Dispatch Center | ELITELIMOLINK',
+    title: 'Dispatch Center | BookNowLux',
     description:
       'View, search, filter, and edit every reservation in real time. Manage booking statuses and update trip details from one dispatch board.',
     noindex: true,
@@ -30,7 +30,7 @@ export default function DispatchPage({ loaderData }: Route.ComponentProps) {
       <header className="dashboard-header">
         <a href="/" className="page-brand" style={{ textDecoration: 'none' }}>
           <span className="brand-mark">B<span>L</span></span>
-          <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / DISPATCH</span></span>
+          <span className="brand-word">BookNowLux<span className="brand-sub"> / DISPATCH</span></span>
         </a>
         <div className="dashboard-user">
           <span>{loaderData.user?.email}</span>

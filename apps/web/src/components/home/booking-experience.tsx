@@ -26,7 +26,7 @@ export function BookingExperience({ initialBusinessName, initialBizId }: { initi
   const navigate = useNavigate();
   const biz = initialBizId || searchParams.get('biz') || '';
   const { pricing, loaded: pricingLoaded, error: pricingError } = usePricing(biz);
-  const businessName = pricing.businessName || initialBusinessName || 'ELITELIMOLINK';
+  const businessName = pricing.businessName || initialBusinessName || 'BookNowLux';
   // Anonymous interaction tracking: logs clicks, selected addresses, and
   // booking actions to the operator's Live activity feed. No passwords or
   // payment values are captured.

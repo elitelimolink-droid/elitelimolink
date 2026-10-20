@@ -52,8 +52,8 @@ export function DriverSignUp() {
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <a href="/driver/login" className="page-brand" style={{ textDecoration: 'none' }}>
-        <span className="brand-mark">E<span>L</span></span>
-        <span className="brand-word">ELITELIMOLINK<span className="brand-sub"> / CHAUFFEUR</span></span>
+        <span className="brand-mark">B<span>L</span></span>
+        <span className="brand-word">BookNowLux<span className="brand-sub"> / CHAUFFEUR</span></span>
       </a>
       <form className="auth-card" onSubmit={handleSubmit}>
         <ThemeToggle className="theme-toggle card-theme" />

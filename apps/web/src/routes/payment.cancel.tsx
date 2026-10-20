@@ -5,7 +5,7 @@ import { loadBusinessNameByReservation } from '@/lib/business-pricing.server';
 import { ArrowRight, XCircle } from 'lucide-react';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
 
-const DEFAULT_BUSINESS_NAME = 'ELITELIMOLINK';
+const DEFAULT_BUSINESS_NAME = 'BookNowLux';
 
 export async function loader({ url }: Route.LoaderArgs) {
   const ref = url.searchParams.get('ref') ?? '';

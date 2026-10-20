@@ -6,7 +6,7 @@ import { seo } from '@/lib/seo';
 import { loadBusinessPricing, resolveBusinessId } from '@/lib/business-pricing.server';
 import { BookingExperience } from '@/components/home/booking-experience';
 
-const DEFAULT_BUSINESS_NAME = 'ELITELIMOLINK';
+const DEFAULT_BUSINESS_NAME = 'BookNowLux';
 
 /**
  * Resolves the business brand and settings for the requested booking page.

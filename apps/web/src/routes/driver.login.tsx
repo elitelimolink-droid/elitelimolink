@@ -6,7 +6,7 @@ import pb from '@/lib/pocketbase-client';
 
 export function meta({ matches, location }: Route.MetaArgs) {
   return seo({ matches, location }, {
-    title: 'Driver Sign In | ELITELIMOLINK',
+    title: 'Driver Sign In | BookNowLux',
     description: 'Drivers sign in to view assigned trips and manage their profile.',
     noindex: true,
   });
