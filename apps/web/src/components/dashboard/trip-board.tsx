@@ -647,9 +647,12 @@ export function TripBoard({
           <button type="button" className="trip-icon-btn" aria-label="Open menu" onClick={() => setMenuOpen(true)}>
             <Menu size={26} strokeWidth={2.25} />
           </button>
-          <div>
-            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.08em', color: '#2563eb', textTransform: 'uppercase', display: 'block', lineHeight: 1 }}>Elite Limo Link</span>
-            <h1 style={{ margin: 0, fontSize: 19, lineHeight: 1.2 }}>Dashboard</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src="/icons/operator-icon.jpg" alt="BookNowLux" className="brand-logo-badge ops" style={{ width: 34, height: 34 }} />
+            <div>
+              <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.08em', color: '#38bdf8', textTransform: 'uppercase', display: 'block', lineHeight: 1 }}>BookNowLux</span>
+              <h1 style={{ margin: 0, fontSize: 18, lineHeight: 1.2 }}>Dashboard</h1>
+            </div>
           </div>
         </div>
         <div className="trip-top-actions">

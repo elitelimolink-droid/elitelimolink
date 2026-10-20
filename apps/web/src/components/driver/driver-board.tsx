@@ -1003,7 +1003,7 @@ export function DriverBoard({
             setActiveTab('drive');
           }}
         >
-          <span className="brand-mark">B<span>L</span></span>
+          <img src="/icons/driver-icon.jpg" alt="BookNowLux Chauffeur" className="brand-logo-badge driver" style={{ width: 34, height: 34 }} />
           <span className="brand-word">BookNowLux<span className="brand-sub"> / CHAUFFEUR</span></span>
         </a>
         <div className="dashboard-user">
@@ -2021,7 +2021,7 @@ export function DriverBoard({
               <header className="driver-driveview-topbar">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
-                    <span className="brand-mark" style={{ width: 24, height: 24, fontSize: 11, borderRadius: 6 }}>B<span>L</span></span>
+                    <img src="/icons/driver-icon.jpg" alt="BookNowLux" className="brand-logo-badge driver" style={{ width: 26, height: 26, borderRadius: 6 }} />
                     <span style={{ fontSize: 13, fontWeight: 900, color: '#fff', letterSpacing: '.04em' }}>BookNowLux</span>
                   </div>
                   <button
@@ -2259,7 +2259,7 @@ export function DriverBoard({
             <header className="driver-driveview-topbar">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
-                  <span className="brand-mark" style={{ width: 24, height: 24, fontSize: 11, borderRadius: 6 }}>B<span>L</span></span>
+                  <img src="/icons/driver-icon.jpg" alt="BookNowLux" className="brand-logo-badge driver" style={{ width: 26, height: 26, borderRadius: 6 }} />
                   <span style={{ fontSize: 13, fontWeight: 900, color: '#fff', letterSpacing: '.04em' }}>BookNowLux</span>
                 </div>
                 <button

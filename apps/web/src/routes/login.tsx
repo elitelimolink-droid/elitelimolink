@@ -82,7 +82,7 @@ export default function LoginPage() {
     <main className="auth-page">
       <div className="ambient ambient-one" /><div className="ambient ambient-two" />
       <a href="/" className="page-brand" style={{ textDecoration: 'none' }}>
-        <span className="brand-mark">B<span>L</span></span>
+        <img src="/icons/operator-icon.jpg" alt="BookNowLux Operator" className="brand-logo-badge ops" />
         <span className="brand-word">BookNowLux<span className="brand-sub"> / OPERATOR</span></span>
       </a>
       {forgot ? (

@@ -289,7 +289,7 @@ export function BookingExperience({ initialBusinessName, initialBizId }: { initi
   const markSecond = brandInitials[1] || brandInitials[0] || 'L';
   return <main className="booking-page">
     <div className="ambient ambient-one" /><div className="ambient ambient-two" />
-    <div className="page-brand"><span className="brand-mark">{markFirst}<span>{markSecond}</span></span><span className="brand-word">{businessName}<span className="brand-sub"> / RESERVATIONS</span></span></div>
+    <div className="page-brand"><img src="/icons/booking-icon.jpg" alt={businessName} className="brand-logo-badge vip" /><span className="brand-word">{businessName}<span className="brand-sub"> / VIP RESERVATIONS</span></span></div>
     {done ? (
       <div className="payment-card">
         <ThemeToggle className="theme-toggle card-theme" />

@@ -16,6 +16,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .ambient-one { background: #e9f2ff; left: -275px; top: -300px; }.ambient-two { background: #edf4ff; right: -270px; bottom: -300px; }
 .page-brand { display: flex; align-items: center; gap: 11px; width: min(100%, 960px); margin: 0 auto 22px; user-select: none; }
 .brand-mark { width: 30px; height: 30px; flex: none; border-radius: 9px; background: #fff4db; border: 1px solid #eee8dd; display: flex; align-items: center; justify-content: center; font-family: Georgia,serif; font-weight: 900; font-size: 15px; font-style: italic; letter-spacing: -5px; padding-right: 4px; transform: skew(-5deg); color: #152137; box-shadow: 0 2px 3px #1c36600c; }.brand-mark span { transform: translateY(-2px); }
+.brand-logo-badge { width: 36px; height: 36px; flex: none; border-radius: 10px; object-fit: cover; box-shadow: 0 4px 14px rgba(0,0,0,0.25); border: 1.5px solid rgba(255, 255, 255, 0.15); display: inline-block; vertical-align: middle; }
+.brand-logo-badge.vip { border-color: rgba(212, 175, 55, 0.55); box-shadow: 0 4px 16px rgba(212, 175, 55, 0.28); }
+.brand-logo-badge.driver { border-color: rgba(16, 185, 129, 0.45); box-shadow: 0 4px 16px rgba(16, 185, 129, 0.22); }
+.brand-logo-badge.ops { border-color: rgba(56, 189, 248, 0.45); box-shadow: 0 4px 16px rgba(56, 189, 248, 0.22); }
 .brand-word { font-weight: 800; letter-spacing: -.05em; font-size: 18px; font-family: "Times New Roman", serif; }.brand-sub { font-size: 10px; font-weight: 800; color: var(--blue); letter-spacing: .07em; margin-left: 7px; }
 .booking-frame { display: grid; grid-template-columns: 420px minmax(0, 1fr); width: min(100%, 960px); min-height: 640px; height: min(685px, calc(100dvh - 130px)); max-height: 760px; background: #fff; border: 1px solid var(--border-ride); border-radius: 22px; box-shadow: 0 27px 62px -33px #1d3b652e; overflow: hidden; }
 .action-pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: #fff; }

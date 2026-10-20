@@ -52,7 +52,7 @@ export function DriverSignUp() {
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <a href="/driver/login" className="page-brand" style={{ textDecoration: 'none' }}>
-        <span className="brand-mark">B<span>L</span></span>
+        <img src="/icons/driver-icon.jpg" alt="BookNowLux Chauffeur" className="brand-logo-badge driver" />
         <span className="brand-word">BookNowLux<span className="brand-sub"> / CHAUFFEUR</span></span>
       </a>
       <form className="auth-card" onSubmit={handleSubmit}>

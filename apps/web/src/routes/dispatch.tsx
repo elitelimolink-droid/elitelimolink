@@ -36,7 +36,7 @@ export default function DispatchPage({ loaderData }: Route.ComponentProps) {
       <div className="ambient ambient-two" />
       <header className="dashboard-header">
         <a href="/" className="page-brand" style={{ textDecoration: 'none' }}>
-          <span className="brand-mark">B<span>L</span></span>
+          <img src="/icons/operator-icon.jpg" alt="BookNowLux Dispatch" className="brand-logo-badge ops" />
           <span className="brand-word">BookNowLux<span className="brand-sub"> / DISPATCH</span></span>
         </a>
         <div className="dashboard-user">
