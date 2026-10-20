@@ -1,0 +1,25 @@
+{
+  "name": "BookNowLux - Operatör & Dispatch Paneli",
+  "short_name": "BNL Dispatch",
+  "description": "BookNowLux Merkezi Rezervasyon ve Sevkiyat Komuta Paneli",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0f1d",
+  "theme_color": "#0a0f1d",
+  "icons": [
+    {
+      "src": "/icons/operator-icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/operator-icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    }
+  ]
+}

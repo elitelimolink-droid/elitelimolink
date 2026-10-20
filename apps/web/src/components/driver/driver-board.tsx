@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import pb from '@/lib/pocketbase-client';
 import { useDriverAuth, type DriverRecord } from '@/hooks/use-driver-auth';
+import { AppShortcutButton } from '@/components/common/app-shortcut-button';
 import {
   compareByPickup,
   normalizeStatus,
@@ -1039,6 +1040,7 @@ export function DriverBoard({
             {gpsLabel}
           </span>
           <span style={{ fontWeight: 600 }}>{profile.name || driverEmail}</span>
+          <AppShortcutButton variant="driver" buttonLabel="Kısayol" />
           <ThemeToggle className="theme-toggle compact" />
           <button type="button" className="dashboard-link" onClick={signOut}>
             <LogOut size={14} style={{ display: 'inline', marginRight: 4 }} /> Sign out

@@ -38,6 +38,7 @@ import { ReservationEditor, type ReservationRecord } from '@/components/dispatch
 import { PricingPanel } from '@/components/dashboard/pricing-panel';
 import { VehicleTiersPanel } from '@/components/dashboard/vehicle-tiers-panel';
 import { MapsStatusCard } from '@/components/dashboard/maps-status-card';
+import { AppShortcutButton } from '@/components/common/app-shortcut-button';
 import { PaymentStatusCard } from '@/components/dashboard/payment-status-card';
 import { BookingLinkCard } from '@/components/dashboard/booking-link-card';
 import { DriversPanel } from '@/components/dashboard/drivers-panel';
@@ -656,6 +657,7 @@ export function TripBoard({
           </div>
         </div>
         <div className="trip-top-actions">
+          <AppShortcutButton variant="ops" buttonLabel="Kısayol" />
           <ThemeToggle className="trip-icon-btn" label="Toggle day or night mode" />
           <button
             type="button"

@@ -3,6 +3,7 @@ import { seo } from '@/lib/seo';
 import { requireAuth } from '@/lib/require-auth';
 import { DispatchCenter } from '@/components/dispatch/dispatch-center';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
+import { AppShortcutButton } from '@/components/common/app-shortcut-button';
 
 export const links: Route.LinksFunction = () => [
   { rel: 'apple-touch-icon', href: '/icons/operator-icon.jpg' },
@@ -40,6 +41,7 @@ export default function DispatchPage({ loaderData }: Route.ComponentProps) {
           <span className="brand-word">BookNowLux<span className="brand-sub"> / DISPATCH</span></span>
         </a>
         <div className="dashboard-user">
+          <AppShortcutButton variant="ops" buttonLabel="Kısayol" />
           <span>{loaderData.user?.email}</span>
           <ThemeToggle className="theme-toggle compact" />
           <a href="/dashboard" className="dashboard-link">Settings</a>

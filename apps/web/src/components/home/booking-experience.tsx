@@ -15,6 +15,7 @@ import { PaymentStep } from '@/components/home/payment-step';
 import { RouteMap } from '@/components/home/route-map';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
 import { useActivityTracker } from '@/lib/activity-tracker';
+import { AppShortcutButton } from '@/components/common/app-shortcut-button';
 
 const initialDraft: ReservationDraft = { service: 'ride', pickup: '', dropoff: '', extraStop: '', extraStopToggle: false, date: '', time: '', returnTrip: false, returnDate: '', returnTime: '', hours: 3, vehicle: 'sedan', passengers: 1, name: '', email: '', phone: '', flight: '', notes: '', carSeat: false, insidePickup: false };
 const stages = ['Trip', 'Vehicle', 'Details', 'Review'];
@@ -289,7 +290,13 @@ export function BookingExperience({ initialBusinessName, initialBizId }: { initi
   const markSecond = brandInitials[1] || brandInitials[0] || 'L';
   return <main className="booking-page">
     <div className="ambient ambient-one" /><div className="ambient ambient-two" />
-    <div className="page-brand"><img src="/icons/booking-icon.jpg" alt={businessName} className="brand-logo-badge vip" /><span className="brand-word">{businessName}<span className="brand-sub"> / VIP RESERVATIONS</span></span></div>
+    <div className="page-brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', maxWidth: 1100, margin: '0 auto 1.5rem', padding: '0 1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <img src="/icons/booking-icon.jpg" alt={businessName} className="brand-logo-badge vip" />
+        <span className="brand-word">{businessName}<span className="brand-sub"> / VIP RESERVATIONS</span></span>
+      </div>
+      <AppShortcutButton variant="vip" buttonLabel="📲 Ana Ekrana / Masaüstüne Ekle" />
+    </div>
     {done ? (
       <div className="payment-card">
         <ThemeToggle className="theme-toggle card-theme" />

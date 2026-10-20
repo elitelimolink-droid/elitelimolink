@@ -71,6 +71,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 							"(function(){try{var K='theme';var s=localStorage.getItem(K);var mode=(s==='light'||s==='dark')?s:'auto';var root=document.documentElement;root.setAttribute('data-theme-mode',mode);var mq=window.matchMedia('(prefers-color-scheme: dark)');function isDark(){return mode==='auto'?mq.matches:mode==='dark';}root.classList.toggle('dark',isDark());mq.addEventListener('change',function(){var m=root.getAttribute('data-theme-mode')||'auto';if(m==='auto'){root.classList.toggle('dark',mq.matches);}});}catch(e){}})();",
 					}}
 				/>
+				{/* Dynamic mobile icon and manifest matching active panel for iOS & Android shortcuts */}
+				<script
+					dangerouslySetInnerHTML={{
+						__html:
+							"(function(){try{var p=window.location.pathname||'';var d=p.indexOf('/driver')===0;var o=p.indexOf('/dashboard')===0||p.indexOf('/dispatch')===0;var icon=d?'/icons/driver-icon.jpg':o?'/icons/operator-icon.jpg':'/icons/booking-icon.jpg';var m=d?'/manifest-driver.json':o?'/manifest-operator.json':'/manifest.json';var title=d?'BookNowLux Driver':o?'BookNowLux Dispatch':'BookNowLux VIP';var al=document.querySelector('link[rel=\"apple-touch-icon\"]');if(al)al.href=icon;var ml=document.querySelector('link[rel=\"manifest\"]');if(ml)ml.href=m;var at=document.querySelector('meta[name=\"apple-mobile-web-app-title\"]');if(at)at.content=title;}catch(e){}})();",
+					}}
+				/>
 				<Meta />
 				<Links />
 				<HorizonsPreviewScripts />

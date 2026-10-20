@@ -1,0 +1,25 @@
+{
+  "name": "BookNowLux - Sürücü & Şoför Portalı",
+  "short_name": "BNL Sürücü",
+  "description": "BookNowLux Profesyonel Şoför ve Sürücü Görev Yönetim Portalı",
+  "start_url": "/driver",
+  "scope": "/driver",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#030712",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/icons/driver-icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/driver-icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    }
+  ]
+}
