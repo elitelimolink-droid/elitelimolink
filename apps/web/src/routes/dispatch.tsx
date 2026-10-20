@@ -4,13 +4,20 @@ import { requireAuth } from '@/lib/require-auth';
 import { DispatchCenter } from '@/components/dispatch/dispatch-center';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
 
+export const links: Route.LinksFunction = () => [
+  { rel: 'apple-touch-icon', href: '/icons/operator-icon.jpg' },
+];
+
 export function meta({ matches, location }: Route.MetaArgs) {
-  return seo({ matches, location }, {
-    title: 'Dispatch Center | BookNowLux',
-    description:
-      'View, search, filter, and edit every reservation in real time. Manage booking statuses and update trip details from one dispatch board.',
-    noindex: true,
-  });
+  return [
+    ...seo({ matches, location }, {
+      title: 'Dispatch Center | BookNowLux',
+      description:
+        'View, search, filter, and edit every reservation in real time. Manage booking statuses and update trip details from one dispatch board.',
+      noindex: true,
+    }),
+    { name: 'apple-mobile-web-app-title', content: 'BookNowLux Dispatch' },
+  ];
 }
 
 export function clientLoader() {

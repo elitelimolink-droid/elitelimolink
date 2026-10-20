@@ -3,12 +3,19 @@ import { seo } from '@/lib/seo';
 import { requireAuth } from '@/lib/require-auth';
 import { TripBoard } from '@/components/dashboard/trip-board';
 
+export const links: Route.LinksFunction = () => [
+  { rel: 'apple-touch-icon', href: '/icons/operator-icon.jpg' },
+];
+
 export function meta({ matches, location }: Route.MetaArgs) {
-  return seo({ matches, location }, {
-    title: 'Dashboard | BookNowLux',
-    description: 'Upcoming reservations grouped by trip date, with status, search, and operator settings.',
-    noindex: true,
-  });
+  return [
+    ...seo({ matches, location }, {
+      title: 'Dashboard | BookNowLux',
+      description: 'Upcoming reservations grouped by trip date, with status, search, and operator settings.',
+      noindex: true,
+    }),
+    { name: 'apple-mobile-web-app-title', content: 'BookNowLux Ops' },
+  ];
 }
 
 export function clientLoader() {

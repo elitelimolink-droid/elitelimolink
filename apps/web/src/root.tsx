@@ -16,6 +16,8 @@ export const links: Route.LinksFunction = () => [
 	{ rel: 'stylesheet', href: stylesheet },
 	{ rel: 'stylesheet', href: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css' },
 	{ rel: 'icon', href: '/favicon.ico', sizes: '32x32' },
+	{ rel: 'manifest', href: '/manifest.json' },
+	{ rel: 'apple-touch-icon', href: '/icons/booking-icon.jpg' },
 	{ rel: 'preconnect', href: 'https://fonts.googleapis.com' },
 	{
 		rel: 'preconnect',
@@ -55,6 +57,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
 			<head>
 				<meta charSet="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
+				<meta name="theme-color" content="#000000" />
+				<meta name="mobile-web-app-capable" content="yes" />
+				<meta name="apple-mobile-web-app-capable" content="yes" />
+				<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+				<meta name="apple-mobile-web-app-title" content="BookNowLux" />
+				<meta name="application-name" content="BookNowLux" />
 				{/* Apply the saved day/night theme before paint to avoid a flash.
 						Respects the device preference when no choice is saved. */}
 				<script

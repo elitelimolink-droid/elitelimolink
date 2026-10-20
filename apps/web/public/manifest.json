@@ -1,0 +1,78 @@
+{
+  "name": "BookNowLux - Luxury Chauffeur Service",
+  "short_name": "BookNowLux",
+  "description": "Book private luxury chauffeur rides, manage operations, and view driver trips with BookNowLux.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#030712",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/icons/booking-icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/booking-icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Driver Portal",
+      "short_name": "Driver",
+      "description": "Open the Chauffeur trip management portal",
+      "url": "/driver",
+      "icons": [
+        {
+          "src": "/icons/driver-icon.jpg",
+          "sizes": "512x512",
+          "type": "image/jpeg"
+        }
+      ]
+    },
+    {
+      "name": "Operator Dashboard",
+      "short_name": "Dashboard",
+      "description": "Open the central fleet and reservation dashboard",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/icons/operator-icon.jpg",
+          "sizes": "512x512",
+          "type": "image/jpeg"
+        }
+      ]
+    },
+    {
+      "name": "Dispatch Center",
+      "short_name": "Dispatch",
+      "description": "Open live trip dispatch and assignment",
+      "url": "/dispatch",
+      "icons": [
+        {
+          "src": "/icons/operator-icon.jpg",
+          "sizes": "512x512",
+          "type": "image/jpeg"
+        }
+      ]
+    },
+    {
+      "name": "Book a Luxury Ride",
+      "short_name": "Book Ride",
+      "description": "Reserve a luxury private chauffeur ride",
+      "url": "/",
+      "icons": [
+        {
+          "src": "/icons/booking-icon.jpg",
+          "sizes": "512x512",
+          "type": "image/jpeg"
+        }
+      ]
+    }
+  ]
+}
